@@ -22,6 +22,7 @@ export interface Cliente {
 }
 
 export interface PedidoItem {
+  sku?: string;
   produtoNome: string;
   qtd: number;
   preco: number;
@@ -29,13 +30,16 @@ export interface PedidoItem {
 
 export interface Pedido {
   id: string;
-  numero: string;
+  numero: string; // Número original do Bling ERP (ex: "10458")
   clienteId: string;
   clienteNome: string;
   data: string;
-  valor: number;
+  valor: number; // Valor Total Faturado
   status: 'Atendido' | 'Faturado' | 'Pendente' | 'Cancelado';
   itens: PedidoItem[];
+  vendedor?: string;
+  condicaoPagamento?: string;
+  observacoes?: string;
 }
 
 export interface Produto {
@@ -128,6 +132,21 @@ export interface Atestado {
   observacoes?: string;
 }
 
+export interface BlingSyncLog {
+  id: string;
+  dataHora: string; // ISO String
+  tipo: 'Manual' | 'Webhook' | 'Agendado';
+  status: 'Sucesso' | 'Alerta' | 'Erro';
+  mensagem: string;
+  clientesImportados: number;
+  pedidosImportados: number;
+  produtosSincronizados: number;
+  tempoExecucaoMs: number;
+  endpointApi: string;
+  detalhesErros?: string[];
+  ipOrigem?: string;
+}
+
 export interface BlingConfig {
   apiKey: string;
   clientId: string;
@@ -136,4 +155,5 @@ export interface BlingConfig {
   ultimoSincronismo?: string;
   webhookAtivo: boolean;
   aliasServidor: string;
+  logsSincronizacao?: BlingSyncLog[];
 }

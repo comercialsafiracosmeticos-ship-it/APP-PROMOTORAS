@@ -4,6 +4,7 @@ import PromotoraConsole from './components/PromotoraConsole';
 import BlingPanel from './components/BlingPanel';
 import ClientFinancePanel from './components/ClientFinancePanel';
 import DashboardBI from './components/DashboardBI';
+import SalesOrdersPanel from './components/SalesOrdersPanel';
 import { 
   Promotora, Cliente, Pedido, Produto, Visita, Escala, Atestado, BlingConfig 
 } from './types';
@@ -314,6 +315,58 @@ export default function App() {
     });
   };
 
+  const handleAddPedido = async (newPedData: Omit<Pedido, 'id'>) => {
+    const newPed: Pedido = {
+      id: 'ped-' + Math.random().toString(36).substr(2, 9),
+      ...newPedData
+    };
+    const updatedPedidos = [newPed, ...pedidos];
+    setPedidos(updatedPedidos);
+
+    await saveToBackend({
+      promotoras,
+      clientes,
+      produtos,
+      pedidos: updatedPedidos,
+      visitas,
+      escalas,
+      atestados,
+      blingConfig
+    });
+  };
+
+  const handleUpdatePedido = async (updatedPed: Pedido) => {
+    const updatedPedidos = pedidos.map(p => p.id === updatedPed.id ? updatedPed : p);
+    setPedidos(updatedPedidos);
+
+    await saveToBackend({
+      promotoras,
+      clientes,
+      produtos,
+      pedidos: updatedPedidos,
+      visitas,
+      escalas,
+      atestados,
+      blingConfig
+    });
+  };
+
+  const handleDeletePedido = async (id: string) => {
+    const updatedPedidos = pedidos.filter(p => p.id !== id);
+    setPedidos(updatedPedidos);
+
+    await saveToBackend({
+      promotoras,
+      clientes,
+      produtos,
+      pedidos: updatedPedidos,
+      visitas,
+      escalas,
+      atestados,
+      blingConfig
+    });
+  };
+
   // Trigger real sync from Bling endpoint
   const handleTriggerBlingSync = async () => {
     setSyncing(true);
@@ -321,22 +374,22 @@ export default function App() {
       const res = await fetch('/api/bling/sync', { method: 'POST' });
       if (res.ok) {
         const data = await res.json();
-        const updatedConfig = {
+        const updatedConfig = data.blingConfig || {
           ...blingConfig,
           statusConexao: 'Conectado',
           ultimoSincronismo: data.ultimoSincronismo
         };
         setBlingConfig(updatedConfig);
-        setClientes(data.clientes);
-        setPedidos(data.pedidos);
-        setProdutos(data.produtos);
+        setClientes(data.clientes || clientes);
+        setPedidos(data.pedidos || pedidos);
+        setProdutos(data.produtos || produtos);
 
         // Save immediately to backend/Firestore
         await saveToBackend({
           promotoras,
-          clientes: data.clientes,
-          produtos: data.produtos,
-          pedidos: data.pedidos,
+          clientes: data.clientes || clientes,
+          produtos: data.produtos || produtos,
+          pedidos: data.pedidos || pedidos,
           visitas,
           escalas,
           atestados,
@@ -460,55 +513,17 @@ export default function App() {
         )}
 
         {activeTab === 'PEDIDOS' && !isStandaloneMode && (
-          <div className="space-y-4">
-            <div>
-              <h2 className="font-display font-bold text-lg text-white">Histórico de Faturamentos ERP Bling</h2>
-              <p className="text-xs text-white/60 font-sans">Acompanhe as ordens de faturamentos de cosméticos enviadas aos estabelecimentos parceiros.</p>
-            </div>
-
-            <div className="bg-[#161618] border border-white/10 rounded-2xl p-6 overflow-x-auto shadow-xl">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="bg-[#1F1F22]/50 border-b border-white/10 text-white/60 font-bold">
-                    <th className="px-4 py-3">Número Pedido</th>
-                    <th className="px-4 py-3">Estabelecimento / Loja</th>
-                    <th className="px-4 py-3">Data Faturamento</th>
-                    <th className="px-4 py-3">Itens Integrados</th>
-                    <th className="px-4 py-3">Faturamento status</th>
-                    <th className="px-4 py-3 text-right">Preço Total</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {pedidos.map((p) => (
-                    <tr key={p.id} className="hover:bg-white/5 transition-colors">
-                      <td className="px-4 py-3 font-mono font-bold text-amber-400">#{p.numero}</td>
-                      <td className="px-4 py-3 font-semibold text-white">{p.clienteNome}</td>
-                      <td className="px-4 py-3 text-white/60">
-                        {new Date(p.data).toLocaleDateString('pt-BR')}
-                      </td>
-                      <td className="px-4 py-3 text-white/80">
-                        <div className="space-y-0.5">
-                          {p.itens.map((item, idx) => (
-                            <div key={idx} className="text-[10px] text-white/50">
-                              <span className="font-bold text-amber-500/90">{item.qtd}x</span> {item.produtoNome}
-                            </div>
-                          ))}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="bg-emerald-500/10 text-emerald-400 font-bold px-2 py-0.5 rounded-full border border-emerald-500/20">
-                          {p.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right font-bold text-white">
-                        {p.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <SalesOrdersPanel
+            pedidos={pedidos}
+            clientes={clientes}
+            produtos={produtos}
+            ultimoSincronismo={blingConfig.ultimoSincronismo}
+            onSyncBling={handleTriggerBlingSync}
+            syncing={syncing}
+            onAddPedido={handleAddPedido}
+            onUpdatePedido={handleUpdatePedido}
+            onDeletePedido={handleDeletePedido}
+          />
         )}
 
         {activeTab === 'BLING' && (

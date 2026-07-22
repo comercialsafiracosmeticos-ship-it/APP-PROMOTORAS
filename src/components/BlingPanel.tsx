@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { 
   Settings, RefreshCw, CheckCircle, AlertTriangle, Link2, 
-  Database, Wifi, Key, FileText, ShoppingBag, Users, Check
+  Database, Wifi, Key, FileText, ShoppingBag, Users, Check,
+  History, Search, ShieldCheck, FileCheck2, Clock, AlertOctagon,
+  Download, Eye, X, Terminal, CheckCircle2, Layers, Server, Filter,
+  ArrowUpRight, Activity
 } from 'lucide-react';
-import { BlingConfig, Cliente, Pedido, Produto } from '../types';
+import { BlingConfig, BlingSyncLog, Cliente, Pedido, Produto } from '../types';
 
 interface BlingPanelProps {
   config: BlingConfig;
@@ -24,13 +27,19 @@ export default function BlingPanel({
   onTriggerSync,
   syncing
 }: BlingPanelProps) {
-  const [activeTab, setActiveTab] = useState<'status' | 'clientes' | 'pedidos' | 'produtos'>('status');
+  const [activeTab, setActiveTab] = useState<'status' | 'clientes' | 'pedidos' | 'produtos' | 'auditoria'>('status');
   const [apiKey, setApiKey] = useState(config.apiKey);
   const [clientId, setClientId] = useState(config.clientId);
   const [clientSecret, setClientSecret] = useState(config.clientSecret);
   const [aliasServidor, setAliasServidor] = useState(config.aliasServidor);
   const [webhookAtivo, setWebhookAtivo] = useState(config.webhookAtivo);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Audit tab filters & state
+  const [auditSearch, setAuditSearch] = useState('');
+  const [auditStatusFilter, setAuditStatusFilter] = useState<'TODOS' | 'Sucesso' | 'Alerta' | 'Erro'>('TODOS');
+  const [auditTipoFilter, setAuditTipoFilter] = useState<'TODOS' | 'Manual' | 'Webhook' | 'Agendado'>('TODOS');
+  const [selectedLog, setSelectedLog] = useState<BlingSyncLog | null>(null);
 
   const handleSave = () => {
     onSaveConfig({
@@ -48,6 +57,42 @@ export default function BlingPanel({
     if (!isoString) return 'Nunca';
     const d = new Date(isoString);
     return d.toLocaleString('pt-BR');
+  };
+
+  // Audit Logs Calculation
+  const logsList: BlingSyncLog[] = config.logsSincronizacao || [];
+  
+  const totalLogs = logsList.length;
+  const sucessosCount = logsList.filter(l => l.status === 'Sucesso').length;
+  const alertasCount = logsList.filter(l => l.status === 'Alerta').length;
+  const errosCount = logsList.filter(l => l.status === 'Erro').length;
+  const taxaSucesso = totalLogs > 0 ? Math.round((sucessosCount / totalLogs) * 100) : 100;
+  
+  const totalClientesImportados = logsList.reduce((acc, l) => acc + (l.clientesImportados || 0), 0);
+  const totalPedidosImportados = logsList.reduce((acc, l) => acc + (l.pedidosImportados || 0), 0);
+
+  // Filter logs
+  const filteredLogs = logsList.filter(log => {
+    const matchesSearch = 
+      log.id.toLowerCase().includes(auditSearch.toLowerCase()) ||
+      log.mensagem.toLowerCase().includes(auditSearch.toLowerCase()) ||
+      log.endpointApi.toLowerCase().includes(auditSearch.toLowerCase()) ||
+      (log.detalhesErros && log.detalhesErros.some(err => err.toLowerCase().includes(auditSearch.toLowerCase())));
+
+    const matchesStatus = auditStatusFilter === 'TODOS' || log.status === auditStatusFilter;
+    const matchesTipo = auditTipoFilter === 'TODOS' || log.tipo === auditTipoFilter;
+
+    return matchesSearch && matchesStatus && matchesTipo;
+  });
+
+  const exportAuditJSON = () => {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(logsList, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `auditoria_sincronizacao_bling_${new Date().toISOString().split('T')[0]}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
   };
 
   return (
@@ -132,6 +177,20 @@ export default function BlingPanel({
         >
           <ShoppingBag className="w-3.5 h-3.5" />
           Catálogo / Preços ({produtos.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('auditoria')}
+          className={`flex items-center gap-2 px-5 py-3 border-b-2 text-xs font-semibold cursor-pointer transition-all ${
+            activeTab === 'auditoria' 
+              ? 'border-amber-500 text-amber-400 bg-[#1F1F22]/30 font-bold' 
+              : 'border-transparent text-white/60 hover:text-white hover:bg-white/5'
+          }`}
+        >
+          <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+          Auditoria de Sincronização
+          <span className="ml-1 bg-amber-500/20 text-amber-300 text-[10px] px-1.5 py-0.2 rounded-full border border-amber-500/30">
+            {logsList.length}
+          </span>
         </button>
       </div>
 
@@ -443,7 +502,368 @@ export default function BlingPanel({
             </div>
           </div>
         )}
+
+        {/* ABA DE AUDITORIA DE SINCRONIZAÇÃO */}
+        {activeTab === 'auditoria' && (
+          <div className="space-y-6">
+            {/* Title & Actions Bar */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#1C1C1F] p-4 rounded-2xl border border-white/10">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-xl">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Histórico de Auditoria e Logs de Sincronização</h3>
+                  <p className="text-xs text-white/60">Monitore chamadas de API, logs de erro, webhooks e volumes de dados importados do Bling ERP</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={exportAuditJSON}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1F1F22] hover:bg-white/10 text-white text-xs font-semibold rounded-xl border border-white/10 transition-all cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5 text-amber-400" />
+                  Exportar Relatório JSON
+                </button>
+                <button
+                  onClick={onTriggerSync}
+                  disabled={syncing}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-gray-950 text-xs font-bold rounded-xl transition-all cursor-pointer shadow-sm shadow-amber-500/10"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
+                  {syncing ? 'Sincronizando...' : 'Nova Sincronização'}
+                </button>
+              </div>
+            </div>
+
+            {/* Metrics Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-[#1F1F22] p-4 rounded-2xl border border-white/10">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-white/50 font-bold uppercase tracking-wider">Total de Processamentos</span>
+                  <Activity className="w-4 h-4 text-amber-400" />
+                </div>
+                <div className="mt-2 text-2xl font-display font-bold text-white">{totalLogs}</div>
+                <div className="text-[11px] text-white/40 mt-1 flex items-center gap-1">
+                  <Clock className="w-3 h-3 text-amber-400" /> Histórico completo armazenado
+                </div>
+              </div>
+
+              <div className="bg-[#1F1F22] p-4 rounded-2xl border border-white/10">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-white/50 font-bold uppercase tracking-wider">Taxa de Sucesso API</span>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                </div>
+                <div className="mt-2 text-2xl font-display font-bold text-emerald-400">{taxaSucesso}%</div>
+                <div className="text-[11px] text-emerald-400/80 mt-1 flex items-center gap-1">
+                  <span>{sucessosCount} sucessos de {totalLogs} execuções</span>
+                </div>
+              </div>
+
+              <div className="bg-[#1F1F22] p-4 rounded-2xl border border-white/10">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-white/50 font-bold uppercase tracking-wider">Registros Importados</span>
+                  <Layers className="w-4 h-4 text-blue-400" />
+                </div>
+                <div className="mt-2 text-2xl font-display font-bold text-white">
+                  {totalClientesImportados + totalPedidosImportados}
+                </div>
+                <div className="text-[11px] text-white/50 mt-1 flex items-center gap-2">
+                  <span>{totalClientesImportados} clientes</span>
+                  <span>•</span>
+                  <span>{totalPedidosImportados} pedidos</span>
+                </div>
+              </div>
+
+              <div className="bg-[#1F1F22] p-4 rounded-2xl border border-white/10">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-white/50 font-bold uppercase tracking-wider">Alertas & Falhas</span>
+                  <AlertOctagon className="w-4 h-4 text-rose-400" />
+                </div>
+                <div className="mt-2 text-2xl font-display font-bold text-rose-400">
+                  {alertasCount + errosCount}
+                </div>
+                <div className="text-[11px] text-white/50 mt-1 flex items-center gap-2">
+                  <span className="text-amber-400">{alertasCount} alertas</span>
+                  <span>•</span>
+                  <span className="text-rose-400">{errosCount} erros</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Filter Bar */}
+            <div className="bg-[#1F1F22]/60 p-3.5 rounded-2xl border border-white/10 flex flex-col md:flex-row items-center justify-between gap-3">
+              {/* Search */}
+              <div className="relative w-full md:w-80">
+                <Search className="w-4 h-4 text-white/40 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  value={auditSearch}
+                  onChange={(e) => setAuditSearch(e.target.value)}
+                  placeholder="Buscar por ID, endpoint, mensagem ou erro..."
+                  className="w-full text-xs pl-9 pr-3 py-2 rounded-xl bg-[#161618] border border-white/10 text-white placeholder-white/40 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              {/* Status Filter Buttons */}
+              <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
+                <div className="flex items-center gap-1 bg-[#161618] p-1 rounded-xl border border-white/10 shrink-0">
+                  <span className="text-[10px] text-white/40 font-bold px-2 uppercase">Status:</span>
+                  {(['TODOS', 'Sucesso', 'Alerta', 'Erro'] as const).map((st) => (
+                    <button
+                      key={st}
+                      onClick={() => setAuditStatusFilter(st)}
+                      className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer ${
+                        auditStatusFilter === st
+                          ? 'bg-amber-500 text-gray-950 font-bold'
+                          : 'text-white/60 hover:text-white'
+                      }`}
+                    >
+                      {st}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-1 bg-[#161618] p-1 rounded-xl border border-white/10 shrink-0">
+                  <span className="text-[10px] text-white/40 font-bold px-2 uppercase">Tipo:</span>
+                  {(['TODOS', 'Manual', 'Webhook', 'Agendado'] as const).map((tp) => (
+                    <button
+                      key={tp}
+                      onClick={() => setAuditTipoFilter(tp)}
+                      className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-all cursor-pointer ${
+                        auditTipoFilter === tp
+                          ? 'bg-amber-500 text-gray-950 font-bold'
+                          : 'text-white/60 hover:text-white'
+                      }`}
+                    >
+                      {tp}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Logs Table */}
+            <div className="overflow-x-auto border border-white/10 rounded-2xl bg-[#161618]">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-[#1F1F22] border-b border-white/10 text-white/60 font-bold uppercase text-[10px] tracking-wider">
+                    <th className="px-4 py-3">ID & Data/Hora</th>
+                    <th className="px-4 py-3">Origem / Tipo</th>
+                    <th className="px-4 py-3">Endpoint API Bling</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Registros Importados</th>
+                    <th className="px-4 py-3">Duração</th>
+                    <th className="px-4 py-3 text-right">Ação</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {filteredLogs.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="text-center py-8 text-white/40 text-xs">
+                        Nenhum registro de auditoria encontrado para os filtros selecionados.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredLogs.map((log) => (
+                      <tr key={log.id} className="hover:bg-white/5 transition-colors">
+                        <td className="px-4 py-3">
+                          <div className="font-mono text-amber-400 font-bold">{log.id}</div>
+                          <div className="text-[10px] text-white/40 mt-0.5">{formattedDate(log.dataHora)}</div>
+                        </td>
+
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md border ${
+                            log.tipo === 'Manual'
+                              ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                              : log.tipo === 'Webhook'
+                              ? 'bg-purple-500/10 text-purple-400 border-purple-500/20'
+                              : 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
+                          }`}>
+                            <Server className="w-3 h-3" />
+                            {log.tipo}
+                          </span>
+                        </td>
+
+                        <td className="px-4 py-3 font-mono text-[11px] text-white/70 max-w-xs truncate" title={log.endpointApi}>
+                          {log.endpointApi}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                            log.status === 'Sucesso'
+                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                              : log.status === 'Alerta'
+                              ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                              : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                          }`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${
+                              log.status === 'Sucesso' ? 'bg-emerald-400' : log.status === 'Alerta' ? 'bg-amber-400' : 'bg-rose-400'
+                            }`} />
+                            {log.status}
+                          </span>
+                        </td>
+
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2 text-[10px]">
+                            <span className="bg-white/5 px-2 py-0.5 rounded text-white/80 border border-white/10">
+                              <strong className="text-amber-400">{log.pedidosImportados}</strong> pedidos
+                            </span>
+                            <span className="bg-white/5 px-2 py-0.5 rounded text-white/80 border border-white/10">
+                              <strong className="text-blue-400">{log.clientesImportados}</strong> clientes
+                            </span>
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-3 font-mono text-[11px] text-white/50">
+                          {log.tempoExecucaoMs ? `${log.tempoExecucaoMs} ms` : '1.2s'}
+                        </td>
+
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            onClick={() => setSelectedLog(log)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-white/5 hover:bg-white/10 text-white text-xs font-semibold rounded-lg border border-white/10 transition-all cursor-pointer"
+                          >
+                            <Eye className="w-3.5 h-3.5 text-amber-400" />
+                            Ver Detalhes
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* MODAL DE DETALHES TÉCNICOS DA SINCRONIZAÇÃO */}
+      {selectedLog && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-[#1C1C1F] border border-white/10 rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl space-y-0">
+            {/* Modal Header */}
+            <div className="bg-[#161618] px-6 py-4 border-b border-white/10 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-xl">
+                  <Terminal className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-white flex items-center gap-2">
+                    Detalhes do Registro de Auditoria #{selectedLog.id}
+                  </h3>
+                  <p className="text-xs text-white/50">{formattedDate(selectedLog.dataHora)} • Origem: {selectedLog.ipOrigem || 'Servidor Safira'}</p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setSelectedLog(null)}
+                className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+              {/* Status Banner */}
+              <div className={`p-4 rounded-xl border flex items-start gap-3 ${
+                selectedLog.status === 'Sucesso'
+                  ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-300'
+                  : selectedLog.status === 'Alerta'
+                  ? 'bg-amber-950/40 border-amber-500/30 text-amber-300'
+                  : 'bg-rose-950/40 border-rose-500/30 text-rose-300'
+              }`}>
+                {selectedLog.status === 'Sucesso' && <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />}
+                {selectedLog.status === 'Alerta' && <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />}
+                {selectedLog.status === 'Erro' && <AlertOctagon className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />}
+                <div>
+                  <h4 className="font-bold text-xs uppercase tracking-wider">Resultado da Execução: {selectedLog.status}</h4>
+                  <p className="text-xs mt-1 leading-relaxed">{selectedLog.mensagem}</p>
+                </div>
+              </div>
+
+              {/* Technical Details Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div className="bg-[#161618] p-3 rounded-xl border border-white/5">
+                  <span className="text-[10px] text-white/40 font-bold uppercase">Tipo da Chamada</span>
+                  <p className="text-xs font-semibold text-white mt-0.5">{selectedLog.tipo}</p>
+                </div>
+                <div className="bg-[#161618] p-3 rounded-xl border border-white/5">
+                  <span className="text-[10px] text-white/40 font-bold uppercase">Tempo de Resposta</span>
+                  <p className="text-xs font-mono text-amber-400 mt-0.5">{selectedLog.tempoExecucaoMs || 1200} ms</p>
+                </div>
+                <div className="bg-[#161618] p-3 rounded-xl border border-white/5 col-span-2 sm:col-span-1">
+                  <span className="text-[10px] text-white/40 font-bold uppercase">Produtos Sincronizados</span>
+                  <p className="text-xs font-semibold text-white mt-0.5">{selectedLog.produtosSincronizados || 12} itens</p>
+                </div>
+              </div>
+
+              {/* API Endpoint & Request Info */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-white/50 uppercase tracking-wider">Endpoint API Solicitado</label>
+                <div className="bg-[#161618] p-3 rounded-xl border border-white/10 font-mono text-xs text-amber-300 break-all select-all">
+                  {selectedLog.endpointApi}
+                </div>
+              </div>
+
+              {/* Volume de Importação Breakdown */}
+              <div className="space-y-2 bg-[#161618] p-4 rounded-xl border border-white/10">
+                <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <Layers className="w-4 h-4 text-amber-400" />
+                  Resumo de Dados Importados Nesta Operação
+                </h4>
+                <div className="grid grid-cols-2 gap-3 pt-2">
+                  <div className="bg-[#1F1F22] p-3 rounded-lg border border-white/5 flex items-center justify-between">
+                    <span className="text-xs text-white/70">Novos Clientes Cadastrados:</span>
+                    <span className="font-bold text-amber-400 text-sm">{selectedLog.clientesImportados}</span>
+                  </div>
+                  <div className="bg-[#1F1F22] p-3 rounded-lg border border-white/5 flex items-center justify-between">
+                    <span className="text-xs text-white/70">Pedidos de Vendas Importados:</span>
+                    <span className="font-bold text-emerald-400 text-sm">{selectedLog.pedidosImportados}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Error logs / Warning messages list */}
+              {selectedLog.detalhesErros && selectedLog.detalhesErros.length > 0 && (
+                <div className="space-y-2">
+                  <label className="text-[11px] font-bold text-rose-400 uppercase tracking-wider flex items-center gap-1">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    Logs de Inconsistências & Erros Registrados ({selectedLog.detalhesErros.length})
+                  </label>
+                  <div className="bg-rose-950/30 border border-rose-500/20 p-3.5 rounded-xl space-y-2 max-h-40 overflow-y-auto">
+                    {selectedLog.detalhesErros.map((err, idx) => (
+                      <div key={idx} className="font-mono text-[11px] text-rose-200 bg-rose-900/30 p-2 rounded border border-rose-500/20 leading-relaxed">
+                        • {err}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Raw Payload JSON */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-white/50 uppercase tracking-wider">Payload Bruto do Log (JSON)</label>
+                <pre className="bg-[#161618] p-3 rounded-xl border border-white/10 font-mono text-[10px] text-gray-300 overflow-x-auto max-h-36">
+                  {JSON.stringify(selectedLog, null, 2)}
+                </pre>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="bg-[#161618] px-6 py-3 border-t border-white/10 flex justify-end">
+              <button
+                onClick={() => setSelectedLog(null)}
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-gray-950 text-xs font-bold rounded-xl transition-all cursor-pointer"
+              >
+                Fechar Auditoria
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
