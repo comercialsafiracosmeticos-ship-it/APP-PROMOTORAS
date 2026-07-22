@@ -1,0 +1,6 @@
+{
+  "name": "Safira Portal Comercial",
+  "description": "Portal de gestão e auditoria de promotoras de vendas com integração Bling, monitoramento de PDV, ponto eletrônico via GPS, controle de gôndolas e assistente virtual inteligente.",
+  "requestFramePermissions": ["camera", "geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

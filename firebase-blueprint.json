@@ -1,0 +1,122 @@
+{
+  "entities": {
+    "promotoras": {
+      "title": "Promotoras",
+      "description": "Cadastro de promotoras e administradores de campo",
+      "type": "object",
+      "properties": {
+        "nome": { "type": "string" },
+        "codigoBling": { "type": "string" },
+        "telefone": { "type": "string" },
+        "email": { "type": "string" },
+        "status": { "type": "string" },
+        "avatar": { "type": "string" },
+        "role": { "type": "string" }
+      },
+      "required": ["nome", "role"]
+    },
+    "clientes": {
+      "title": "Clientes",
+      "description": "Lojas e pontos de venda parceiros",
+      "type": "object",
+      "properties": {
+        "nome": { "type": "string" },
+        "cnpj": { "type": "string" },
+        "cidade": { "type": "string" },
+        "endereco": { "type": "string" },
+        "telefone": { "type": "string" },
+        "faturamentoTotal": { "type": "number" }
+      },
+      "required": ["nome"]
+    },
+    "produtos": {
+      "title": "Produtos",
+      "description": "Catálogo de produtos e cosméticos",
+      "type": "object",
+      "properties": {
+        "nome": { "type": "string" },
+        "sku": { "type": "string" },
+        "ean": { "type": "string" },
+        "precoSugerido": { "type": "number" },
+        "categoria": { "type": "string" }
+      },
+      "required": ["nome", "sku"]
+    },
+    "pedidos": {
+      "title": "Pedidos ERP Bling",
+      "description": "Histórico de pedidos e faturamentos de cosméticos",
+      "type": "object",
+      "properties": {
+        "numero": { "type": "string" },
+        "clienteId": { "type": "string" },
+        "clienteNome": { "type": "string" },
+        "data": { "type": "string" },
+        "valor": { "type": "number" },
+        "status": { "type": "string" }
+      },
+      "required": ["numero", "clienteNome"]
+    },
+    "visitas": {
+      "title": "Visitas e Auditorias PDV",
+      "description": "Ponto eletrônico GPS, auditorias, fotos de fachada/display, produtos a vencer e concorrência",
+      "type": "object",
+      "properties": {
+        "promotoraId": { "type": "string" },
+        "promotoraNome": { "type": "string" },
+        "clienteId": { "type": "string" },
+        "clienteNome": { "type": "string" },
+        "data": { "type": "string" },
+        "status": { "type": "string" },
+        "fotoDisplay": { "type": "string" },
+        "fotoFachada": { "type": "string" },
+        "comentarios": { "type": "string" },
+        "pecasVendidas": { "type": "number" }
+      },
+      "required": ["promotoraId", "clienteId"]
+    },
+    "escalas": {
+      "title": "Escalas de Trabalho",
+      "description": "Roteiro e agendamentos de visitas por promotora",
+      "type": "object",
+      "properties": {
+        "promotoraId": { "type": "string" },
+        "promotoraNome": { "type": "string" },
+        "clienteId": { "type": "string" },
+        "clienteNome": { "type": "string" },
+        "data": { "type": "string" },
+        "horaInicio": { "type": "string" },
+        "horaFim": { "type": "string" },
+        "observacoes": { "type": "string" }
+      },
+      "required": ["promotoraId", "clienteId", "data"]
+    },
+    "atestados": {
+      "title": "Atestados e Documentos",
+      "description": "Atestados médicos e justificativas enviadas pelas promotoras",
+      "type": "object",
+      "properties": {
+        "promotoraId": { "type": "string" },
+        "promotoraNome": { "type": "string" },
+        "tipo": { "type": "string" },
+        "dataEnvio": { "type": "string" },
+        "dataAtestado": { "type": "string" },
+        "diasAfastamento": { "type": "number" },
+        "motivo": { "type": "string" },
+        "arquivoUrl": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["promotoraId", "dataEnvio"]
+    },
+    "config": {
+      "title": "Configurações da Empresa",
+      "description": "Configurações de integração ERP Bling e parâmetros do sistema",
+      "type": "object",
+      "properties": {
+        "apiKey": { "type": "string" },
+        "clientId": { "type": "string" },
+        "statusConexao": { "type": "string" }
+      },
+      "required": ["statusConexao"]
+    }
+  }
+}
