@@ -34,6 +34,7 @@ export default function App() {
 
   const [activePromotora, setActivePromotora] = useState<Promotora | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [syncNotice, setSyncNotice] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   // Load from backend
   useEffect(() => {
@@ -260,6 +261,59 @@ export default function App() {
     });
   };
 
+  // Client CRUD Handlers
+  const handleAddCliente = async (newCliData: Omit<Cliente, 'id'>) => {
+    const newCliente: Cliente = {
+      id: 'cli-man-' + Math.random().toString(36).substr(2, 9),
+      ...newCliData
+    };
+    const updatedClientes = [newCliente, ...clientes];
+    setClientes(updatedClientes);
+
+    await saveToBackend({
+      promotoras,
+      clientes: updatedClientes,
+      produtos,
+      pedidos,
+      visitas,
+      escalas,
+      atestados,
+      blingConfig
+    });
+  };
+
+  const handleUpdateCliente = async (updatedCli: Cliente) => {
+    const updatedClientes = clientes.map(c => c.id === updatedCli.id ? updatedCli : c);
+    setClientes(updatedClientes);
+
+    await saveToBackend({
+      promotoras,
+      clientes: updatedClientes,
+      produtos,
+      pedidos,
+      visitas,
+      escalas,
+      atestados,
+      blingConfig
+    });
+  };
+
+  const handleDeleteCliente = async (id: string) => {
+    const updatedClientes = clientes.filter(c => c.id !== id);
+    setClientes(updatedClientes);
+
+    await saveToBackend({
+      promotoras,
+      clientes: updatedClientes,
+      produtos,
+      pedidos,
+      visitas,
+      escalas,
+      atestados,
+      blingConfig
+    });
+  };
+
   // Trigger real sync from Bling endpoint
   const handleTriggerBlingSync = async () => {
     setSyncing(true);
@@ -267,19 +321,49 @@ export default function App() {
       const res = await fetch('/api/bling/sync', { method: 'POST' });
       if (res.ok) {
         const data = await res.json();
-        setBlingConfig(prev => ({
-          ...prev,
+        const updatedConfig = {
+          ...blingConfig,
           statusConexao: 'Conectado',
           ultimoSincronismo: data.ultimoSincronismo
-        }));
+        };
+        setBlingConfig(updatedConfig);
         setClientes(data.clientes);
         setPedidos(data.pedidos);
         setProdutos(data.produtos);
+
+        // Save immediately to backend/Firestore
+        await saveToBackend({
+          promotoras,
+          clientes: data.clientes,
+          produtos: data.produtos,
+          pedidos: data.pedidos,
+          visitas,
+          escalas,
+          atestados,
+          blingConfig: updatedConfig
+        });
+
+        setSyncNotice({
+          message: data.message || `Sincronização com o Bling ERP realizada com sucesso! ${data.clientes?.length || 0} clientes/PDVs atualizados e salvos no banco de dados.`,
+          type: 'success'
+        });
+      } else {
+        setSyncNotice({
+          message: 'Erro ao conectar com o serviço do Bling ERP.',
+          type: 'error'
+        });
       }
     } catch (e) {
       console.error("Failed to sync with Bling ERP", e);
+      setSyncNotice({
+        message: 'Erro inesperado ao sincronizar com o Bling ERP.',
+        type: 'error'
+      });
     } finally {
       setSyncing(false);
+      setTimeout(() => {
+        setSyncNotice(null);
+      }, 7000);
     }
   };
 
@@ -301,8 +385,34 @@ export default function App() {
       />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
+        {/* BANNER DE NOTIFICAÇÃO DE SINCRONISMO */}
+        {syncNotice && (
+          <div className={`mb-6 p-4 rounded-2xl border flex items-center justify-between gap-4 animate-fadeIn shadow-xl ${
+            syncNotice.type === 'success' 
+              ? 'bg-emerald-950/80 border-emerald-500/40 text-emerald-200' 
+              : 'bg-rose-950/80 border-rose-500/40 text-rose-200'
+          }`}>
+            <div className="flex items-center gap-3">
+              <div className={`p-2 rounded-xl ${syncNotice.type === 'success' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="font-bold text-sm">Status da Sincronização Bling ERP</p>
+                <p className="text-xs opacity-90">{syncNotice.message}</p>
+              </div>
+            </div>
+            <button 
+              type="button" 
+              onClick={() => setSyncNotice(null)}
+              className="text-xs font-bold px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-all cursor-pointer"
+            >
+              Fechar
+            </button>
+          </div>
+        )}
+
         {/* TAB CONTROLS SELECTOR */}
-        {activeTab === 'PROMOTORA' && activePromotora && (
+        {activeTab === 'PROMOTORA' && (
           <PromotoraConsole
             promotoras={promotoras}
             clientes={clientes}
@@ -310,7 +420,7 @@ export default function App() {
             visitas={visitas}
             escalas={escalas}
             atestados={atestados}
-            activePromotora={activePromotora}
+            activePromotora={activePromotora || promotoras[0]}
             setActivePromotora={setActivePromotora}
             onAddPromotora={handleAddPromotora}
             onDeletePromotora={handleDeletePromotora}
@@ -323,6 +433,8 @@ export default function App() {
             onDeleteAtestado={handleDeleteAtestado}
             isStandaloneMode={isStandaloneMode}
             setIsStandaloneMode={setIsStandaloneMode}
+            onSyncBling={handleTriggerBlingSync}
+            syncing={syncing}
           />
         )}
 
@@ -330,6 +442,11 @@ export default function App() {
           <ClientFinancePanel
             clientes={clientes}
             pedidos={pedidos}
+            onSyncBling={handleTriggerBlingSync}
+            syncing={syncing}
+            onAddCliente={handleAddCliente}
+            onUpdateCliente={handleUpdateCliente}
+            onDeleteCliente={handleDeleteCliente}
           />
         )}
 

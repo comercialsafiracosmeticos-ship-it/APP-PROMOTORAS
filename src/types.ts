@@ -16,6 +16,7 @@ export interface Cliente {
   cidade: string;
   endereco: string;
   telefone: string;
+  contato?: string; // Pessoa de contato no PDV para a promotora procurar
   produtosComprados: string[]; // List of product names bought
   faturamentoTotal: number;
 }

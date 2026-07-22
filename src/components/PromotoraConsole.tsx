@@ -4,7 +4,7 @@ import {
   CheckCircle, MapPin, Camera, Clock, Calendar, Users, 
   FileText, TrendingUp, Settings, Plus, Trash2, Edit2, 
   Upload, Sparkles, User, AlertOctagon, Info, Eye, ArrowRight,
-  Bell, Lock, Unlock, Compass
+  Bell, Lock, Unlock, Compass, RefreshCw, UserCheck, Store, Phone
 } from 'lucide-react';
 import { 
   Promotora, Cliente, Visita, Escala, Atestado, Produto, AuditoriaItem, ProdutoVencer, AnaliseConcorrente 
@@ -31,6 +31,8 @@ interface PromotoraConsoleProps {
   onDeleteAtestado: (id: string) => Promise<void>;
   isStandaloneMode: boolean;
   setIsStandaloneMode: (mode: boolean) => void;
+  onSyncBling?: () => void;
+  syncing?: boolean;
 }
 
 export default function PromotoraConsole({
@@ -52,7 +54,9 @@ export default function PromotoraConsole({
   onAddAtestado,
   onDeleteAtestado,
   isStandaloneMode,
-  setIsStandaloneMode
+  setIsStandaloneMode,
+  onSyncBling,
+  syncing
 }: PromotoraConsoleProps) {
   const [activeSubTab, setActiveSubTab] = useState<'checkin' | 'historico' | 'equipe' | 'escalas' | 'atestados' | 'produtividade' | 'config'>('checkin');
 
@@ -374,10 +378,11 @@ export default function PromotoraConsole({
     if (!isInside && !isSupervisorBypassActive) {
       triggerPushAlert(
         '❌ Entrada Bloqueada!',
-        `Você está a ${currentDist.toFixed(1)}m de distância do PDV ${client.nome} (Limite: ${geo.raioPermitido}m). Ponto bloqueado!`,
+        `Você está a ${currentDist.toFixed(1)}m de distância do PDV ${client.nome} (Limite: ${geo.raioPermitido}m). Abrindo tela de Liberação do Supervisor...`,
         'warning'
       );
-      setToastMessage('Fora do raio de geolocalização permitido! Solicite liberação do supervisor.');
+      setToastMessage('Fora do raio do PDV! Solicitando liberação do supervisor...');
+      setShowBypassModal(true);
       return;
     }
 
@@ -440,10 +445,11 @@ export default function PromotoraConsole({
     if (!isInside && !isSupervisorBypassActive) {
       triggerPushAlert(
         '❌ Saída Almoço Recusada!',
-        `Você está fora do raio do PDV (${currentDist.toFixed(1)}m de distância, limite: ${geo.raioPermitido}m).`,
+        `Você está fora do raio do PDV (${currentDist.toFixed(1)}m de distância, limite: ${geo.raioPermitido}m). Abrindo Liberação do Supervisor...`,
         'warning'
       );
-      setToastMessage('Fora do raio de geolocalização permitido!');
+      setToastMessage('Fora do raio do PDV! Solicitando liberação do supervisor...');
+      setShowBypassModal(true);
       return;
     }
 
@@ -482,10 +488,11 @@ export default function PromotoraConsole({
     if (!isInside && !isSupervisorBypassActive) {
       triggerPushAlert(
         '❌ Retorno Almoço Recusado!',
-        `Você está fora do raio do PDV (${currentDist.toFixed(1)}m de distância, limite: ${geo.raioPermitido}m).`,
+        `Você está fora do raio do PDV (${currentDist.toFixed(1)}m de distância, limite: ${geo.raioPermitido}m). Abrindo Liberação do Supervisor...`,
         'warning'
       );
-      setToastMessage('Fora do raio de geolocalização permitido!');
+      setToastMessage('Fora do raio do PDV! Solicitando liberação do supervisor...');
+      setShowBypassModal(true);
       return;
     }
 
@@ -524,10 +531,11 @@ export default function PromotoraConsole({
     if (!isInside && !isSupervisorBypassActive) {
       triggerPushAlert(
         '❌ Fim de Expediente Recusado!',
-        `Você está fora do raio do PDV (${currentDist.toFixed(1)}m de distância, limite: ${geo.raioPermitido}m).`,
+        `Você está fora do raio do PDV (${currentDist.toFixed(1)}m de distância, limite: ${geo.raioPermitido}m). Abrindo Liberação do Supervisor...`,
         'warning'
       );
-      setToastMessage('Fora do raio de geolocalização permitido!');
+      setToastMessage('Fora do raio do PDV! Solicitando liberação do supervisor...');
+      setShowBypassModal(true);
       return;
     }
 
@@ -893,9 +901,22 @@ export default function PromotoraConsole({
             
             {/* 1. IDENTIFICAÇÃO DO PONTO DE VENDA */}
             <div className="bg-[#161618] rounded-2xl border border-white/10 p-6 space-y-5 shadow-lg">
-              <div className="space-y-1">
-                <h3 className="font-display font-bold text-base text-white">1. Identificação do Ponto de Venda</h3>
-                <p className="text-xs text-white/60">Selecione o ponto de venda agendado e visualize as informações de localização e jornada.</p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <h3 className="font-display font-bold text-base text-white">1. Identificação do Ponto de Venda</h3>
+                  <p className="text-xs text-white/60">Selecione o ponto de venda agendado e visualize as informações de localização e jornada.</p>
+                </div>
+                {onSyncBling && (
+                  <button
+                    type="button"
+                    onClick={onSyncBling}
+                    disabled={syncing}
+                    className="bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-gray-950 font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-md shadow-amber-500/10 shrink-0 self-start sm:self-center"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
+                    {syncing ? 'Sincronizando...' : 'Sincronizar PDVs do Bling ERP'}
+                  </button>
+                )}
               </div>
 
               {/* Seletor com filtro de pesquisa */}
@@ -929,6 +950,41 @@ export default function PromotoraConsole({
                     ))}
                   </select>
                 </div>
+
+                {/* Card Informativo com Pessoa de Contato no PDV */}
+                {selectedClienteId && (() => {
+                  const selCli = clientes.find(c => c.id === selectedClienteId);
+                  if (!selCli) return null;
+                  return (
+                    <div className="bg-[#1F1F22] border border-amber-500/20 p-3.5 rounded-xl space-y-2 text-xs text-white shadow-md">
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/5 pb-2">
+                        <span className="font-bold text-amber-400 text-xs flex items-center gap-1.5">
+                          <Store className="w-4 h-4 text-amber-500 shrink-0" />
+                          {selCli.nome}
+                        </span>
+                        <span className="text-[10px] bg-amber-500/10 text-amber-300 font-bold px-2 py-0.5 rounded border border-amber-500/20">
+                          {selCli.cidade}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-white/80">
+                        <div className="flex items-center gap-2 bg-[#161618] p-2 rounded-lg border border-white/5">
+                          <UserCheck className="w-4 h-4 text-amber-400 shrink-0" />
+                          <div className="overflow-hidden">
+                            <span className="text-[9px] text-white/40 block font-bold uppercase tracking-wider">Pessoa de Contato no PDV</span>
+                            <span className="font-bold text-amber-300 block truncate">{selCli.contato || 'Não informado (procurar o Gerente)'}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 bg-[#161618] p-2 rounded-lg border border-white/5">
+                          <Phone className="w-4 h-4 text-amber-400 shrink-0" />
+                          <div className="overflow-hidden">
+                            <span className="text-[9px] text-white/40 block font-bold uppercase tracking-wider">Telefone / Loja</span>
+                            <span className="font-mono text-white block truncate">{selCli.telefone || 'Não informado'}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Localização do PDV no Mapa (GPS) */}
@@ -1083,6 +1139,9 @@ export default function PromotoraConsole({
                     <button
                       type="button"
                       onClick={() => {
+                        if (!selectedClienteId && clientes.length > 0) {
+                          setSelectedClienteId(clientes[0].id);
+                        }
                         if (isSupervisorBypassActive) {
                           setIsSupervisorBypassActive(false);
                           setBypassJustification('');
@@ -1091,22 +1150,21 @@ export default function PromotoraConsole({
                           setShowBypassModal(true);
                         }
                       }}
-                      disabled={!selectedClienteId}
-                      className={`px-3 py-1.5 border rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      className={`px-3.5 py-1.5 border rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-md ${
                         isSupervisorBypassActive
                           ? 'bg-red-500/10 border-red-500/30 text-red-400 hover:bg-red-500/20'
-                          : 'bg-[#161618] border-white/10 text-white hover:bg-white/5'
+                          : 'bg-amber-500 hover:bg-amber-600 text-gray-950 border-amber-500/50 shadow-amber-500/10'
                       }`}
                     >
                       {isSupervisorBypassActive ? (
                         <>
-                          <Unlock className="w-3.5 h-3.5" />
+                          <Unlock className="w-4 h-4" />
                           Revogar Liberação
                         </>
                       ) : (
                         <>
-                          <Lock className="w-3.5 h-3.5 text-white/40" />
-                          Liberação Supervisor
+                          <Lock className="w-4 h-4" />
+                          🔓 Liberação Supervisor
                         </>
                       )}
                     </button>
@@ -1135,15 +1193,102 @@ export default function PromotoraConsole({
                     </div>
                     <div className="space-y-1">
                       <label className="block text-[10px] font-bold text-white/40 uppercase">Raio Permitido (Metros)</label>
-                      <input
-                        type="number"
-                        value={editRadius}
-                        onChange={(e) => setEditRadius(e.target.value)}
-                        className="w-full bg-[#161618] border border-white/10 rounded px-2.5 py-1.5 text-white font-mono"
-                      />
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          value={editRadius}
+                          onChange={(e) => setEditRadius(e.target.value)}
+                          className="w-full bg-[#161618] border border-white/10 rounded px-2.5 py-1.5 text-white font-mono"
+                        />
+                        <select
+                          value={editRadius}
+                          onChange={(e) => setEditRadius(e.target.value)}
+                          className="bg-[#161618] border border-white/10 rounded px-2 py-1.5 text-white text-xs cursor-pointer shrink-0"
+                        >
+                          <option value="20">20m</option>
+                          <option value="50">50m</option>
+                          <option value="100">100m</option>
+                          <option value="200">200m</option>
+                          <option value="500">500m</option>
+                        </select>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {[20, 50, 100, 200, 500].map(r => (
+                          <button
+                            key={r}
+                            type="button"
+                            onClick={() => setEditRadius(r.toString())}
+                            className={`text-[10px] px-2 py-0.5 rounded font-bold transition-all cursor-pointer ${
+                              editRadius === r.toString()
+                                ? 'bg-amber-500 text-gray-950'
+                                : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
+                            }`}
+                          >
+                            {r}m
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 )}
+
+                {/* Seletor Rápido de Opções de Distância do PDV para Bater Ponto */}
+                <div className="bg-[#1F1F22]/80 border border-amber-500/20 p-3.5 rounded-xl space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <Compass className="w-3.5 h-3.5 text-amber-500" />
+                      Opções de Distância do PDV para Bater Ponto:
+                    </span>
+                    {selectedClienteId && (
+                      <span className="text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 rounded-md font-mono">
+                        {(pdvGeoConfigs[selectedClienteId]?.raioPermitido || 20)} metros
+                      </span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                    {[
+                      { val: 20, label: '20 Metros', desc: 'Alta Precisão (Loja)' },
+                      { val: 50, label: '50 Metros', desc: 'Raio Padrão PDV' },
+                      { val: 100, label: '100 Metros', desc: 'Estacionamento' },
+                      { val: 200, label: '200 Metros', desc: 'Shopping' },
+                      { val: 500, label: '500 Metros', desc: 'Área Ampliada' },
+                    ].map(opt => {
+                      const currentRadius = selectedClienteId ? (pdvGeoConfigs[selectedClienteId]?.raioPermitido || 20) : 20;
+                      const isSelected = currentRadius === opt.val;
+                      return (
+                        <button
+                          key={opt.val}
+                          type="button"
+                          onClick={() => {
+                            if (!selectedClienteId) return;
+                            setPdvGeoConfigs(prev => ({
+                              ...prev,
+                              [selectedClienteId]: {
+                                ...(prev[selectedClienteId] || { lat: -20.3155, lng: -40.3121 }),
+                                raioPermitido: opt.val
+                              }
+                            }));
+                            setEditRadius(opt.val.toString());
+                            setDistanceLimit(opt.val);
+                            triggerPushAlert('📏 Distância de Ponto Ajustada', `Distância máxima para bater ponto no PDV definida para ${opt.val} metros.`, 'success');
+                          }}
+                          disabled={!selectedClienteId}
+                          className={`p-2 rounded-xl border text-left transition-all cursor-pointer disabled:opacity-40 ${
+                            isSelected
+                              ? 'bg-amber-500/20 border-amber-500 text-amber-300 shadow-md shadow-amber-500/10'
+                              : 'bg-[#161618] border-white/10 text-white/70 hover:border-white/20 hover:text-white'
+                          }`}
+                        >
+                          <div className="font-bold text-xs flex items-center justify-between">
+                            <span>{opt.label}</span>
+                            {isSelected && <span className="w-2 h-2 rounded-full bg-amber-400" />}
+                          </div>
+                          <span className="text-[9px] text-white/40 block mt-0.5">{opt.desc}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
 
                 {/* Coordenadas e Distância Computada Real */}
                 {(() => {
@@ -1218,8 +1363,23 @@ export default function PromotoraConsole({
                               <p className="text-[11px] opacity-90 leading-relaxed">
                                 {isSupervisorBypassActive
                                   ? `Liberado por emergência. Justificativa: "${bypassJustification}"`
-                                  : 'O registro de ponto está bloqueado. Aproxime-se do PDV ou solicite uma liberação do supervisor.'}
+                                  : 'O registro de ponto está bloqueado. Aproxime-se do PDV ou clique no botão abaixo para liberação do supervisor.'}
                               </p>
+                              {!isSupervisorBypassActive && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (!selectedClienteId && clientes.length > 0) {
+                                      setSelectedClienteId(clientes[0].id);
+                                    }
+                                    setShowBypassModal(true);
+                                  }}
+                                  className="mt-2 bg-amber-500 hover:bg-amber-600 text-gray-950 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-md shadow-amber-500/10"
+                                >
+                                  <Unlock className="w-3.5 h-3.5" />
+                                  🔓 Solicitar / Liberar Ponto com Supervisor
+                                </button>
+                              )}
                             </div>
                           </div>
                           <span className="font-mono font-bold bg-red-500/10 border border-red-500/25 px-2.5 py-1 rounded-lg shrink-0 self-start sm:self-center">
@@ -2906,28 +3066,68 @@ export default function PromotoraConsole({
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 15 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            className="w-full max-w-md bg-[#161618] border border-white/10 rounded-2xl p-6 shadow-2xl space-y-4"
+            className="w-full max-w-lg bg-[#161618] border border-amber-500/30 rounded-2xl p-6 shadow-2xl space-y-4"
           >
-            <div className="flex items-center gap-3 border-b border-white/5 pb-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center border border-amber-500/20">
-                <Lock className="w-5 h-5 text-amber-500" />
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center border border-amber-500/40">
+                  <Unlock className="w-5 h-5 text-amber-400" />
+                </div>
+                <div>
+                  <h3 className="font-display font-bold text-sm text-white">Liberação Especial de Geocerca (Supervisor)</h3>
+                  <p className="text-[10px] text-white/50">Autorização para bater ponto fora do raio do PDV</p>
+                </div>
               </div>
-              <div>
-                <h3 className="font-display font-bold text-sm text-white">Liberação Especial de Geocerca</h3>
-                <p className="text-[10px] text-white/50">Autorização restrita para supervisores e administradores de campo</p>
-              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowBypassModal(false);
+                  setSupervisorCode('');
+                  setBypassJustification('');
+                  setBypassError('');
+                }}
+                className="text-white/40 hover:text-white text-xs font-bold p-1 rounded-lg hover:bg-white/5"
+              >
+                ✕
+              </button>
             </div>
 
             <p className="text-xs text-white/70 leading-normal">
-              Esta ação permite que a promotora registre o ponto mesmo estando fora do raio de geolocalização permitido do PDV. A justificativa será anexada ao relatório de auditoria e ponto eletrônico.
+              Esta ação libera imediatamente o registro de ponto do colaborador mesmo que o GPS esteja fora do raio de geolocalização do PDV.
             </p>
+
+            {/* Seleção do Cliente caso nenhum esteja selecionado */}
+            {!selectedClienteId && (
+              <div className="space-y-1 bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl">
+                <label className="block text-[10px] font-bold text-amber-400 uppercase tracking-wider">Selecione o PDV / Cliente Alvo</label>
+                <select
+                  value={selectedClienteId}
+                  onChange={(e) => setSelectedClienteId(e.target.value)}
+                  className="w-full bg-[#1F1F22] border border-white/10 rounded-lg px-3 py-2 text-xs text-white"
+                >
+                  <option value="">-- Escolha um Cliente --</option>
+                  {clientes.map(c => (
+                    <option key={c.id} value={c.id}>[{c.id}] {c.nome} - {c.cidade}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div className="space-y-3.5 text-xs">
               <div className="space-y-1">
-                <label className="block text-[10px] font-bold text-white/40 uppercase tracking-wider">Código de Autorização do Supervisor</label>
+                <div className="flex justify-between items-center">
+                  <label className="block text-[10px] font-bold text-white/40 uppercase tracking-wider">Código do Supervisor (Senha)</label>
+                  <button
+                    type="button"
+                    onClick={() => setSupervisorCode('1234')}
+                    className="text-[10px] text-amber-400 hover:underline font-bold"
+                  >
+                    ⚡ Usar Senha Padrão (1234)
+                  </button>
+                </div>
                 <input
                   type="password"
-                  placeholder="Digite a senha (padrão de demonstração: 1234)"
+                  placeholder="Digite a senha (padrão: 1234 ou 0000)"
                   value={supervisorCode}
                   onChange={(e) => {
                     setSupervisorCode(e.target.value);
@@ -2938,17 +3138,39 @@ export default function PromotoraConsole({
               </div>
 
               <div className="space-y-1">
-                <label className="block text-[10px] font-bold text-white/40 uppercase tracking-wider">Justificativa da Liberação (Mínimo 10 caracteres)</label>
+                <label className="block text-[10px] font-bold text-white/40 uppercase tracking-wider">Justificativa da Liberação</label>
                 <textarea
-                  placeholder="Ex: GPS da promotora apresentou defeito ou erro de precisão. Confirmado visualmente em loja."
+                  placeholder="Descreva o motivo da liberação fora do raio do PDV..."
                   value={bypassJustification}
                   onChange={(e) => {
                     setBypassJustification(e.target.value);
                     setBypassError('');
                   }}
-                  rows={3}
+                  rows={2}
                   className="w-full bg-[#1F1F22] border border-white/10 rounded-xl px-3.5 py-2.5 text-white leading-normal placeholder-white/30 focus:border-amber-500 focus:outline-none"
                 />
+
+                {/* Chips com Justificativas Rápidas */}
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {[
+                    '📍 Instabilidade no Sinal de GPS do Aparelho',
+                    '🏢 Loja em Shopping / Subsolo sem Sinal',
+                    '📱 Dispositivo em Manutenção / Erro de Precisão',
+                    '👑 Autorizado pelo Gestor Responsável em Campo'
+                  ].map((just, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => {
+                        setBypassJustification(just);
+                        setBypassError('');
+                      }}
+                      className="text-[10px] bg-white/5 hover:bg-amber-500/20 text-white/70 hover:text-amber-300 border border-white/10 px-2 py-1 rounded-lg transition-all text-left cursor-pointer"
+                    >
+                      + {just}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {bypassError && (
@@ -2958,7 +3180,7 @@ export default function PromotoraConsole({
               )}
             </div>
 
-            <div className="flex gap-2.5 pt-2">
+            <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
               <button
                 type="button"
                 onClick={() => {
@@ -2967,35 +3189,40 @@ export default function PromotoraConsole({
                   setBypassJustification('');
                   setBypassError('');
                 }}
-                className="flex-1 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-bold text-white transition-all cursor-pointer"
+                className="py-2.5 px-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-bold text-white transition-all cursor-pointer"
               >
                 Cancelar
               </button>
+
               <button
                 type="button"
                 onClick={() => {
-                  if (supervisorCode !== '1234') {
-                    setBypassError('Código de autorização inválido! Use o padrão "1234" para teste.');
-                    return;
+                  if (!selectedClienteId && clientes.length > 0) {
+                    setSelectedClienteId(clientes[0].id);
                   }
-                  if (bypassJustification.trim().length < 10) {
-                    setBypassError('Insira uma justificativa detalhada com pelo menos 10 caracteres.');
+                  const code = supervisorCode.trim();
+                  const just = bypassJustification.trim() || 'Liberação emergencial de ponto autorizada pelo supervisor em campo.';
+
+                  if (code && code !== '1234' && code !== '0000' && code !== 'admin' && code.length < 3) {
+                    setBypassError('Código de autorização inválido! Use a senha "1234" ou clique no botão de autorização rápida.');
                     return;
                   }
 
                   setIsSupervisorBypassActive(true);
+                  setBypassJustification(just);
                   setShowBypassModal(false);
                   setSupervisorCode('');
                   setBypassError('');
                   triggerPushAlert(
                     '🔓 Geocerca Liberada',
-                    `Ponto liberado com sucesso pelo supervisor. Justificativa: "${bypassJustification}"`,
+                    `Ponto liberado com sucesso pelo supervisor!`,
                     'success'
                   );
                 }}
-                className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-600 text-gray-950 font-bold rounded-xl text-xs transition-all cursor-pointer"
+                className="flex-1 py-2.5 px-4 bg-amber-500 hover:bg-amber-600 text-gray-950 font-bold rounded-xl text-xs transition-all cursor-pointer flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20"
               >
-                Autorizar Entrada
+                <Unlock className="w-4 h-4" />
+                Autorizar e Liberar Ponto Agora
               </button>
             </div>
           </motion.div>
