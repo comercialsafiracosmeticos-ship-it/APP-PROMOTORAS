@@ -197,9 +197,32 @@ export default function App() {
   };
 
   const handleAddVisita = async (v: Omit<Visita, 'id'>) => {
+    let gps = v.gpsEntrada;
+
+    // Captura de coordenadas GPS utilizando a API de geolocalização do navegador
+    if ((!gps || !gps.lat) && typeof navigator !== 'undefined' && 'geolocation' in navigator) {
+      try {
+        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 6000,
+            maximumAge: 0
+          });
+        });
+        gps = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          accuracy: Math.round(position.coords.accuracy)
+        };
+      } catch (err) {
+        console.warn("Navegador não capturou GPS via Geolocation API, utilizando fallback:", err);
+      }
+    }
+
     const newVisit: Visita = {
       id: 'vis-' + Math.random().toString(36).substr(2, 9),
-      ...v
+      ...v,
+      gpsEntrada: gps || v.gpsEntrada || { lat: -20.3155, lng: -40.3121, accuracy: 10 }
     };
     const updatedVisits = [...visitas, newVisit];
     setVisitas(updatedVisits);

@@ -2191,6 +2191,48 @@ export default function PromotoraConsole({
                     </div>
                   </div>
 
+                  {/* Validação de Geoprocessamento e Mapa de Check-in no PDV */}
+                  {v.gpsEntrada && (
+                    <div className="bg-[#1C1C1E] border border-amber-500/20 rounded-xl p-3.5 space-y-2.5">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/5 pb-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-lg bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                            <MapPin className="w-3.5 h-3.5" />
+                          </div>
+                          <div>
+                            <span className="font-bold text-xs text-white block">Check-in Validado no PDV via GPS</span>
+                            <span className="text-[10px] text-white/50 block">Precisão de Geolocalização: ±{v.gpsEntrada.accuracy || 12}m</span>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[10px] font-mono bg-amber-500/10 text-amber-300 border border-amber-500/20 px-2.5 py-0.5 rounded font-bold">
+                            Lat: {v.gpsEntrada.lat.toFixed(5)}, Lng: {v.gpsEntrada.lng.toFixed(5)}
+                          </span>
+                          <a
+                            href={`https://www.google.com/maps/search/?api=1&query=${v.gpsEntrada.lat},${v.gpsEntrada.lng}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[10px] font-bold text-amber-400 hover:text-amber-300 bg-amber-500/10 border border-amber-500/20 hover:border-amber-500/40 px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+                          >
+                            <span>Abrir no Google Maps ↗</span>
+                          </a>
+                        </div>
+                      </div>
+
+                      {/* Small Mapa Preview */}
+                      <div className="h-36 w-full rounded-lg overflow-hidden bg-[#141416] relative border border-white/10 shadow-inner">
+                        <iframe
+                          width="100%"
+                          height="100%"
+                          className="rounded-lg border-none"
+                          title={`Mapa de Check-in GPS em ${v.clienteNome}`}
+                          src={`https://maps.google.com/maps?q=${v.gpsEntrada.lat},${v.gpsEntrada.lng}&z=16&output=embed`}
+                          style={{ filter: 'invert(90%) hue-rotate(180deg)' }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
                   {v.comentarios && (
                     <div className="bg-[#1F1F22] p-3 rounded-xl border border-white/10 text-xs text-white/80">
                       <p className="font-bold mb-0.5 text-white">Comentários da Promotora:</p>
