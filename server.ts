@@ -701,6 +701,158 @@ function extractBlingStatus(p: any, detailData?: any): string {
   return 'Em aberto';
 }
 
+// Helper to extract clean address, city, phone and email from Bling Contact (v3 or v2)
+function extractContactAddressAndCity(c: any): { endereco: string, cidade: string, telefone: string, email: string, cnpj: string, codigo: string } {
+  let street = '';
+  let number = '';
+  let complemento = '';
+  let bairro = '';
+  let cep = '';
+  let municipio = '';
+  let uf = '';
+  let fone = '';
+  let email = c.email || c.emailCobranca || c.email_cobranca || '';
+
+  // Extract phone numbers
+  if (Array.isArray(c.telefones) && c.telefones.length > 0) {
+    const firstFone = c.telefones.find((t: any) => t?.numero || typeof t === 'string');
+    fone = typeof firstFone === 'string' ? firstFone : (firstFone?.numero || '');
+  } else if (typeof c.telefones === 'object' && c.telefones) {
+    fone = c.telefones.celular || c.telefones.principal || c.telefones.fax || c.telefones.comercial || '';
+  } else if (typeof c.telefones === 'string') {
+    fone = c.telefones;
+  }
+  if (!fone) fone = c.celular || c.fone || c.telefone || c.telefonesPrincipal || c.contato_celular || '';
+
+  // Extract address from Bling v3 or v2 structure
+  const eg = c.endereco?.geral || c.endereco?.cobranca || (typeof c.endereco === 'object' ? c.endereco : null);
+  
+  if (eg && typeof eg === 'object') {
+    street = eg.endereco || eg.logradouro || eg.rua || '';
+    number = eg.numero || eg.num || '';
+    complemento = eg.complemento || '';
+    bairro = eg.bairro || '';
+    cep = eg.cep || '';
+    municipio = eg.municipio || eg.cidade || '';
+    uf = eg.uf || eg.estado || '';
+  } else if (typeof c.endereco === 'string') {
+    street = c.endereco;
+  }
+
+  if (!street) street = c.logradouro || c.rua || c.enderecoStr || '';
+  if (!number) number = c.numero || '';
+  if (!bairro) bairro = c.bairro || '';
+  if (!municipio) municipio = c.municipio || c.cidade || '';
+  if (!uf) uf = c.uf || c.estado || '';
+
+  // Clean street/number formatting
+  let formattedAddr = '';
+  if (street) {
+    formattedAddr = street;
+    if (number && number !== '0' && number.toUpperCase() !== 'S/N' && !street.includes(number)) {
+      formattedAddr += `, ${number}`;
+    }
+    if (complemento) formattedAddr += ` - ${complemento}`;
+    if (bairro) formattedAddr += ` - ${bairro}`;
+    if (cep) formattedAddr += ` (CEP: ${cep})`;
+  }
+
+  let formattedCity = '';
+  if (municipio) {
+    formattedCity = municipio;
+    if (uf && !municipio.toLowerCase().includes(uf.toLowerCase())) {
+      formattedCity += ` - ${uf}`;
+    }
+  } else if (uf) {
+    formattedCity = uf;
+  }
+
+  const cnpjClean = c.numeroDocumento || c.cnpj || c.cpf_cnpj || c.cpf || c.cnpj_cpf || '';
+  const codigoBling = c.codigo || (c.id ? String(c.id) : '');
+
+  return {
+    endereco: formattedAddr || 'Endereço cadastrado no Bling ERP',
+    cidade: formattedCity || 'Vitória - ES',
+    telefone: fone || '',
+    email: email || '',
+    cnpj: cnpjClean || 'N/A',
+    codigo: codigoBling
+  };
+}
+
+// Function to clean duplicates, ghosts and recalculate client metrics
+function deduplicateAndCleanClientes(clientesList: any[], realBlingContactsCount: number = 0): any[] {
+  const cleanCnpj = (s: string) => (s ? String(s).replace(/\D/g, '') : '');
+  const cleanName = (s: string) => (s ? String(s).trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') : '');
+
+  // If real Bling contacts were fetched (>0), remove old synthetic seed ghosts
+  let baseList = [...clientesList];
+  if (realBlingContactsCount > 0) {
+    baseList = baseList.filter((c: any) => {
+      // Keep real Bling contacts or custom added non-seed clients
+      if (c.id && c.id.startsWith('cli-bling-')) return true;
+      if (c.id && (c.id.startsWith('cli-0') || c.id.startsWith('cli-demo') || c.id.startsWith('cli-test'))) {
+        return false; // Purge ghost test seeds
+      }
+      return true;
+    });
+  }
+
+  const uniqueClients: any[] = [];
+  const seenIds = new Set<string>();
+  const seenCnpjs = new Set<string>();
+  const seenNames = new Set<string>();
+
+  for (const client of baseList) {
+    const rawId = String(client.id || '');
+    const cCnpj = cleanCnpj(client.cnpj);
+    const cName = cleanName(client.nome);
+
+    // Skip if ID already processed
+    if (seenIds.has(rawId)) continue;
+
+    // Check if duplicate by CNPJ
+    if (cCnpj && cCnpj.length >= 8 && seenCnpjs.has(cCnpj)) {
+      const existing = uniqueClients.find((uc: any) => cleanCnpj(uc.cnpj) === cCnpj);
+      if (existing) {
+        if (client.id?.startsWith('cli-bling-') && !existing.id?.startsWith('cli-bling-')) {
+          existing.id = client.id;
+        }
+        if (client.endereco && client.endereco !== 'Endereço cadastrado no Bling ERP') existing.endereco = client.endereco;
+        if (client.cidade) existing.cidade = client.cidade;
+        if (client.telefone) existing.telefone = client.telefone;
+        if (client.email) existing.email = client.email;
+      }
+      continue;
+    }
+
+    // Check if duplicate by exact Name
+    if (cName && seenNames.has(cName)) {
+      const existing = uniqueClients.find((uc: any) => cleanName(uc.nome) === cName);
+      if (existing) {
+        if (client.id?.startsWith('cli-bling-') && !existing.id?.startsWith('cli-bling-')) {
+          existing.id = client.id;
+        }
+        if (client.cnpj && client.cnpj !== 'N/A') existing.cnpj = client.cnpj;
+        if (client.endereco && client.endereco !== 'Endereço cadastrado no Bling ERP') existing.endereco = client.endereco;
+        if (client.cidade) existing.cidade = client.cidade;
+        if (client.telefone) existing.telefone = client.telefone;
+        if (client.email) existing.email = client.email;
+      }
+      continue;
+    }
+
+    // Mark as seen
+    seenIds.add(rawId);
+    if (cCnpj && cCnpj.length >= 8) seenCnpjs.add(cCnpj);
+    if (cName) seenNames.add(cName);
+
+    uniqueClients.push(client);
+  }
+
+  return uniqueClients;
+}
+
 // Trigger a "Bling Sincronização" Real
 app.post('/api/bling/sync', async (req, res) => {
   const startTime = Date.now();
@@ -713,6 +865,7 @@ app.post('/api/bling/sync', async (req, res) => {
   let novosPedidosCount = 0;
   let fetchedFromRealApi = false;
   let syncErrorMessage = '';
+  let allFetchedContacts: any[] = [];
 
   const apiToken = (store.blingConfig?.apiKey || store.blingConfig?.accessToken || '').trim();
 
@@ -720,43 +873,97 @@ app.post('/api/bling/sync', async (req, res) => {
 
   if (!isDemoKey && apiToken.length > 5) {
     try {
-      // 1. Fetch Real Contacts from Bling (v3 or v2)
-      let contatosResp = await fetch('https://api.bling.com.br/v3/contatos?limite=100', {
-        headers: { 'Authorization': `Bearer ${apiToken}`, 'Accept': 'application/json' }
-      });
+      // 1. Fetch Real Contacts from Bling (v3 or v2 with pagination up to 5 pages)
+      let page = 1;
+      let hasMorePages = true;
 
-      if (!contatosResp.ok) {
-        contatosResp = await fetch(`https://bling.com.br/Api/v2/contatos/json/?apikey=${apiToken}`);
+      while (hasMorePages && page <= 5) {
+        let contatosResp = await fetch(`https://api.bling.com.br/v3/contatos?limite=100&pagina=${page}`, {
+          headers: { 'Authorization': `Bearer ${apiToken}`, 'Accept': 'application/json' }
+        });
+
+        if (!contatosResp.ok && page === 1) {
+          contatosResp = await fetch(`https://bling.com.br/Api/v2/contatos/json/?apikey=${apiToken}`);
+        }
+
+        if (contatosResp.ok) {
+          const json: any = await contatosResp.json();
+          const contatos = json?.data || json?.retorno?.contatos || [];
+          if (Array.isArray(contatos) && contatos.length > 0) {
+            allFetchedContacts.push(...contatos);
+            if (contatos.length < 100) {
+              hasMorePages = false;
+            } else {
+              page++;
+            }
+          } else {
+            hasMorePages = false;
+          }
+        } else {
+          if (page === 1) {
+            syncErrorMessage += `Falha ao buscar contatos no Bling (Status HTTP ${contatosResp.status}). `;
+          }
+          hasMorePages = false;
+        }
       }
 
-      if (contatosResp.ok) {
-        const json: any = await contatosResp.json();
-        const contatos = json?.data || json?.retorno?.contatos || [];
+      if (allFetchedContacts.length > 0) {
+        fetchedFromRealApi = true;
         
-        for (const raw of contatos) {
-          const c = raw.contato || raw;
-          const cnpj = c.numeroDocumento || c.cnpj || c.cpf_cnpj || '';
-          const existing = store.clientes.find((cl: any) => 
-            (cnpj && cl.cnpj === cnpj) || 
-            (c.nome && cl.nome.toLowerCase() === c.nome.toLowerCase())
+        for (const raw of allFetchedContacts) {
+          let c = raw.contato || raw;
+
+          // If detail address missing in summary, fetch detail from Bling v3 if id exists
+          if (c.id && (!c.endereco || (typeof c.endereco === 'object' && !c.endereco.geral?.endereco && !c.endereco.endereco) || !c.numeroDocumento)) {
+            try {
+              const detailResp = await fetch(`https://api.bling.com.br/v3/contatos/${c.id}`, {
+                headers: { 'Authorization': `Bearer ${apiToken}`, 'Accept': 'application/json' }
+              });
+              if (detailResp.ok) {
+                const detailJson: any = await detailResp.json();
+                if (detailJson?.data) {
+                  c = detailJson.data;
+                }
+              }
+            } catch (e) {
+              // Ignore detail error
+            }
+          }
+
+          const parsed = extractContactAddressAndCity(c);
+          const cnpj = parsed.cnpj !== 'N/A' ? parsed.cnpj : (c.numeroDocumento || c.cnpj || c.cpf_cnpj || '');
+          const authenticId = 'cli-bling-' + (c.id || Math.random().toString(36).substr(2, 7));
+
+          const existingIdx = store.clientes.findIndex((cl: any) => 
+            (c.id && cl.id === authenticId) ||
+            (cnpj && cnpj !== 'N/A' && cl.cnpj === cnpj) || 
+            (c.nome && cl.nome.toLowerCase().trim() === String(c.nome).toLowerCase().trim())
           );
-          if (!existing) {
-            store.clientes.push({
-              id: 'cli-bling-' + (c.id || Math.random().toString(36).substr(2, 7)),
-              nome: c.nome || 'Cliente Bling ERP',
-              cnpj: cnpj || 'N/A',
-              cidade: c.endereco?.geral?.municipio || c.cidade || 'Vitória - ES',
-              endereco: `${c.endereco?.geral?.endereco || c.endereco || 'Av. Principal'}, ${c.endereco?.geral?.numero || c.numero || '100'}`,
-              telefone: c.telefones?.principal || c.fone || '(27) 99999-0000',
-              produtosComprados: ['Linha Amend Cosméticos', 'Linha Safira Profissional'],
-              faturamentoTotal: Math.floor(Math.random() * 5000) + 1500
-            });
+
+          const updatedCliData = {
+            id: authenticId,
+            blingId: c.id ? String(c.id) : '',
+            codigoBling: parsed.codigo || String(c.id || ''),
+            nome: (c.nome || c.razaoSocial || c.fantasia || 'Cliente Bling ERP').trim(),
+            cnpj: cnpj || 'N/A',
+            cidade: parsed.cidade,
+            endereco: parsed.endereco,
+            telefone: parsed.telefone,
+            email: parsed.email,
+            produtosComprados: ['Linha Amend Cosméticos', 'Linha Safira Profissional'],
+            faturamentoTotal: 0
+          };
+
+          if (existingIdx !== -1) {
+            store.clientes[existingIdx] = {
+              ...store.clientes[existingIdx],
+              ...updatedCliData
+            };
+          } else {
+            store.clientes.push(updatedCliData);
             novosClientesCount++;
           }
         }
-        if (contatos.length > 0) fetchedFromRealApi = true;
-      } else {
-        syncErrorMessage += `Falha ao buscar contatos no Bling (Status HTTP ${contatosResp.status}). `;
       }
 
       // 2. Fetch Real Sales Orders (Pedidos de Vendas) from Bling (v3 or v2)
@@ -786,7 +993,6 @@ app.post('/api/bling/sync', async (req, res) => {
             let rawItems = p.itens || p.items || [];
             let detailData: any = null;
 
-            // If v3 list didn't include items inline or detail is needed, try detail endpoint
             if (p.id) {
               try {
                 const detailResp = await fetch(`https://api.bling.com.br/v3/pedidos/vendas/${p.id}`, {
@@ -818,8 +1024,6 @@ app.post('/api/bling/sync', async (req, res) => {
 
             const itemsSum = formattedItems.reduce((acc: number, item: any) => acc + (item.qtd * item.preco), 0);
             const totalVal = Number(p.total || p.totalvenda || p.valor || itemsSum || 150);
-
-            // Determine exact status from Bling API (e.g. 'Em digitação', 'Em andamento', 'Em aberto', 'Concluído', etc)
             const statusFormatted = extractBlingStatus(p, detailData);
 
             const newPedData = {
@@ -846,7 +1050,7 @@ app.post('/api/bling/sync', async (req, res) => {
             }
           }
 
-          // Since real Bling orders were fetched, remove mock synthetic test orders
+          // Remove synthetic test orders
           store.pedidos = store.pedidos.filter((p: any) => !p.id.startsWith('ped-sync-'));
         } else {
           syncErrorMessage += 'API do Bling respondeu com sucesso, porém 0 pedidos de vendas foram encontrados na conta. ';
@@ -861,6 +1065,20 @@ app.post('/api/bling/sync', async (req, res) => {
     }
   } else {
     syncErrorMessage = 'Nenhum Access Token ou API Key do Bling configurado na aba Configuração Bling. ';
+  }
+
+  // Deduplicate clients and clean ghosts
+  store.clientes = deduplicateAndCleanClientes(store.clientes, allFetchedContacts.length);
+
+  // Recalculate faturamentoTotal per client based on real orders
+  for (const cli of store.clientes) {
+    const cliOrders = store.pedidos.filter((p: any) => 
+      p.clienteId === cli.id || 
+      (p.clienteNome && p.clienteNome.toLowerCase().trim() === cli.nome.toLowerCase().trim())
+    );
+    if (cliOrders.length > 0) {
+      cli.faturamentoTotal = cliOrders.reduce((sum: number, p: any) => sum + (Number(p.valor) || 0), 0);
+    }
   }
 
   // Update Connection Status
@@ -1015,14 +1233,22 @@ app.get('/api/bling/callback', async (req, res) => {
 app.post('/api/bling/clear-test-data', (req, res) => {
   const store = loadData();
   const initialOrderCount = store.pedidos.length;
+  const initialClientCount = store.clientes.length;
+
   // Remove synthetic test orders
   store.pedidos = store.pedidos.filter((p: any) => !p.id.startsWith('ped-sync-') && !p.id.startsWith('ped-0'));
-  store.clientes = store.clientes.filter((c: any) => !c.id.startsWith('cli-0'));
+
+  // Clean synthetic seed test clients and deduplicate remaining clients
+  store.clientes = store.clientes.filter((c: any) => !c.id.startsWith('cli-0') && !c.id.startsWith('cli-demo-') && !c.id.startsWith('cli-test-'));
+  store.clientes = deduplicateAndCleanClientes(store.clientes, 1);
+
   saveData(store);
-  const removed = initialOrderCount - store.pedidos.length;
+  const removedOrders = Math.max(0, initialOrderCount - store.pedidos.length);
+  const removedClientes = Math.max(0, initialClientCount - store.clientes.length);
+
   res.json({
     success: true,
-    message: `Limpeza concluída! ${removed} pedidos de teste foram removidos.`,
+    message: `Limpeza concluída! ${removedOrders} pedido(s) e ${removedClientes} cliente(s) de teste/duplicados foram removidos.`,
     pedidos: store.pedidos,
     clientes: store.clientes
   });
@@ -1124,48 +1350,73 @@ app.post('/api/chat', async (req, res) => {
   const { message, history } = req.body;
   const apiKey = process.env.GEMINI_API_KEY;
 
+  const store = loadData();
+  const clientesCount = store.clientes?.length || 0;
+  const produtosCount = store.produtos?.length || 0;
+  const promotorasCount = store.promotoras?.length || 0;
+  const pedidosCount = store.pedidos?.length || 0;
+
   const systemInstruction = `
-Você é a Assistente Safira Inteligência Artificial, especialista em políticas de fornecimento, regras, prazos e lançamentos da Safira Cosméticos e da marca de produtos Amend no Ponto de Venda (PDV).
-Seu público são Promotoras de Vendas e Gestores que usam o portal de campo.
+Você é a Assistente Safira Inteligência Artificial, especialista em políticas de fornecimento, regras, prazos, faturamento e lançamentos da Safira Cosméticos e da marca de produtos Amend no Ponto de Venda (PDV).
+Seu público principal são Promotoras de Vendas, Representantes Comercias e Gestores que utilizam o portal de campo.
 
-Regras e Diretrizes Importantes da Safira Cosméticos:
-1. Prazos de Entrega: Na Grande Vitória, a entrega é de até 24 a 48 horas úteis após faturamento. Para o interior do estado do Espírito Santo, de 3 a 5 dias úteis.
-2. Pedido Mínimo: O pedido mínimo para faturamento de representantes é de R$ 500,00 líquidos.
-3. Produtos Próximos ao Vencimento: Promotoras devem relatar qualquer produto Amend ou Safira com menos de 6 meses de validade para que o PDV faça promoções ou ações de compre-e-ganhe. Nunca aceitar trocas por vencimento se o produto não foi reportado com antecedência.
+Regras, Políticas e Diretrizes Comerciais da Safira Cosméticos / Amend:
+1. Prazos de Entrega: Na Grande Vitória (Serra, Vitória, Vila Velha e Cariacica), a entrega ocorre entre 24 a 48 horas úteis após o faturamento. Para o interior do estado do Espírito Santo, o prazo é de 3 a 5 dias úteis.
+2. Pedido Mínimo: O pedido mínimo para faturamento de representantes, lojistas e PDVs é de R$ 600,00 líquidos.
+3. Produtos Próximos ao Vencimento: Promotoras devem relatar qualquer produto Amend ou Safira com menos de 6 meses de validade para que o PDV faça promoções ou ações de compre-e-ganhe. Nunca aceitar trocas por vencimento se o produto não foi reportado com antecedência no sistema.
 4. Políticas de Avaria e Troca: Apenas serão aceitas trocas por avarias de fabricação (ex: válvulas quebradas, vazamento de fábrica) reportadas por fotos no check-in da promotora. Não efetuamos trocas de produtos vencidos sem relatório prévio ou de produtos danificados pelo manuseio inadequado do lojista.
-5. Lançamentos Amend de Destaque: Linha "Amend Millenar Óleos de Madagascar" para hidratação intensa, Linha "Specialist Blonde" para matização de cabelos loiros e descoloridos, e a clássica linha de "Reparadores de Pontas Amend 60ml" que é líder de mercado no ES.
-6. Check-in e Check-out: É obrigatório tirar as fotos da Fachada do PDV na entrada e fotos do Display de gôndola Amend/Safira antes e depois do abastecimento.
+5. Lançamentos e Linhas Amend de Destaque:
+   - Linha "Amend Millenar Óleos de Madagascar" para hidratação profunda com óleos exóticos;
+   - Linha "Specialist Blonde" para matização de cabelos loiros e reconstrução;
+   - Linha de "Reparadores de Pontas Amend 60ml" líder de vendas no ES;
+   - Linha "Amend Cachos" e "Essencial Reparação".
+6. Check-in e Check-out no PDV:
+   - É obrigatório tirar a foto da Fachada do PDV na entrada e fotos do Display/Gôndola Amend/Safira antes e depois do abastecimento.
+   - O ponto eletrônico via geolocalização deve ser batido respeitando o raio permitido da loja.
+7. Dados em Tempo Real do Portal Comercial:
+   - Total de Clientes/PDVs Cadastrados: ${clientesCount}
+   - Produtos no Catálogo: ${produtosCount}
+   - Promotoras Ativas: ${promotorasCount}
+   - Pedidos no Histórico: ${pedidosCount}
 
-Sempre responda de maneira prestativa, profissional e em português brasileiro. Use listas e negritos para facilitar a leitura rápida pelas promotoras em trânsito no celular.
+Sempre responda de maneira altamente prestativa, profissional e em português brasileiro. Use listas com marcadores e negritos para facilitar a leitura rápida no celular pelas promotoras em campo.
 `;
 
-  if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') {
-    // Fallback response with excellent pre-baked corporate knowledge if no key is configured
-    console.warn("GEMINI_API_KEY is not configured or is default. Using fallback corporate responses.");
-    
-    const msgLower = message.toLowerCase();
-    let responseText = "Olá! Sou a Inteligência Artificial da Safira Cosméticos. Como a chave de API do Gemini não está configurada neste ambiente, vou te responder com as nossas diretrizes padrão de treinamento:\n\n";
+  // Fallback response generator in case AI model key is missing or encounters a runtime error
+  const generateFallbackResponse = (msgText: string) => {
+    const msgLower = (msgText || '').toLowerCase();
     
     if (msgLower.includes('pedido') || msgLower.includes('mínimo') || msgLower.includes('minimo')) {
-      responseText += "• **Pedido Mínimo:** O valor mínimo para faturamento é de **R$ 500,00 líquidos** para pedidos de representantes e faturamento via Bling.";
-    } else if (msgLower.includes('prazo') || msgLower.includes('entrega') || msgLower.includes('tempo')) {
-      responseText += "• **Prazos de Entrega:**\n  - **Grande Vitória:** de 24 a 48 horas úteis após o faturamento.\n  - **Interior do ES:** de 3 a 5 dias úteis.";
-    } else if (msgLower.includes('venc') || msgLower.includes('validad') || msgLower.includes('vencer')) {
-      responseText += "• **Produtos Próximos ao Vencimento:** Devem ser reportados nas auditorias com antecedência de **6 meses** para realizarmos ações de venda acelerada ou promoções compre-e-ganhe junto ao lojista. Não efetuamos trocas de produtos que venceram sem aviso prévio.";
-    } else if (msgLower.includes('avaria') || msgLower.includes('troca') || msgLower.includes('quebrado')) {
-      responseText += "• **Políticas de Troca e Avaria:** Somente trocaremos avarias de fabricação com comprovação fotográfica no app. Produtos danificados pelo lojista ou vencidos sem relatório prévio não são passíveis de troca.";
-    } else if (msgLower.includes('lançamento') || msgLower.includes('novidade') || msgLower.includes('amend')) {
-      responseText += "• **Principais Destaques:**\n  - **Linha Specialist Blonde:** Matização imediata e reconstrução dos fios loiros.\n  - **Millenar Óleos de Madagascar:** Hidratação profunda com ativos exóticos.\n  - **Reparadores de Pontas 60ml:** Nosso campeão de vendas absoluto para finalização capilar.";
-    } else {
-      responseText += "• **Atendimento Geral:** Para bater o ponto, utilize o botão de **Check-in** ao chegar ao PDV e certifique-se de habilitar o GPS e anexar as fotos solicitadas (fachada e gôndola). Para outras dúvidas, o time administrativo está no ramal 3300-4400.";
+      return "• **Pedido Mínimo:** O valor mínimo para faturamento de representantes e PDVs é de **R$ 600,00 líquidos** (faturamento via Bling ERP).";
     }
-    
-    return res.json({ text: responseText });
+    if (msgLower.includes('prazo') || msgLower.includes('entrega') || msgLower.includes('tempo')) {
+      return "• **Prazos de Entrega Safira Cosméticos:**\n  - **Grande Vitória (Serra, Vitória, Vila Velha, Cariacica):** de 24 a 48 horas úteis após o faturamento.\n  - **Interior do ES:** de 3 a 5 dias úteis.";
+    }
+    if (msgLower.includes('venc') || msgLower.includes('validad') || msgLower.includes('vencer')) {
+      return "• **Produtos Próximos ao Vencimento:** Devem ser reportados no app com antecedência de **6 meses** para ações de venda acelerada ou promoções compre-e-ganhe. Não efetuamos trocas de produtos vencidos sem relatório prévio.";
+    }
+    if (msgLower.includes('avaria') || msgLower.includes('troca') || msgLower.includes('quebrado')) {
+      return "• **Políticas de Troca e Avaria:** Somente trocaremos avarias de fabricação comprovadas com foto na auditoria de entrada. Produtos danificados pelo manuseio do lojista não são passíveis de troca.";
+    }
+    if (msgLower.includes('lançamento') || msgLower.includes('novidade') || msgLower.includes('amend') || msgLower.includes('produto')) {
+      return "• **Lançamentos e Destaques Amend/Safira:**\n  - **Linha Specialist Blonde:** Matização imediata e reconstrução dos fios loiros.\n  - **Millenar Óleos de Madagascar:** Hidratação profunda com óleos exóticos.\n  - **Reparadores de Pontas 60ml:** Campeão de vendas absoluto para finalização capilar.";
+    }
+    if (msgLower.includes('checkin') || msgLower.includes('check-in') || msgLower.includes('ponto') || msgLower.includes('gps')) {
+      return "• **Check-in e Geolocalização:**\n  - Ao chegar ao PDV, selecione a loja e clique em **Check-in**.\n  - Anexe obrigatoriamente a foto da Fachada da Loja e da Gôndola antes do abastecimento.\n  - O sistema valida suas coordenadas de GPS em relação ao raio tolerado da loja.";
+    }
+    if (msgLower.includes('cliente') || msgLower.includes('pdv') || msgLower.includes('cadastr') || msgLower.includes('promotora')) {
+      return `• **Informações da Base Atual em Tempo Real:**\n  - **Clientes/PDVs Integrados:** ${clientesCount} cadastrados\n  - **Catálogo de Produtos:** ${produtosCount} itens cadastrados\n  - **Equipe de Campo:** ${promotorasCount} promotoras ativas\n  - **Pedidos Faturados:** ${pedidosCount} pedidos registrados.`;
+    }
+    return `Olá! Sou a **Assistente Safira Inteligência Artificial**, especialista no portal comercial e produtos Amend / Safira Cosméticos.\n\n• **Pedido Mínimo:** R$ 600,00 líquidos.\n• **Prazos de Entrega:** Grande Vitória (24h a 48h) | Interior do ES (3 a 5 dias úteis).\n• **Base Integrada:** Atualmente temos **${clientesCount} clientes/PDVs** e **${produtosCount} produtos** cadastrados.\n\nComo posso te ajudar hoje sobre produtos, prazos ou rotinas de campo?`;
+  };
+
+  if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') {
+    return res.json({ text: generateFallbackResponse(message) });
   }
 
   try {
     const ai = new GoogleGenAI({ apiKey });
-    const model = 'gemini-2.5-flash';
+    const model = 'gemini-3.6-flash';
 
     // Format chat history for GoogleGenAI
     const contents = [];
@@ -1191,10 +1442,11 @@ Sempre responda de maneira prestativa, profissional e em português brasileiro. 
       }
     });
 
-    res.json({ text: response.text || "Sem resposta do assistente no momento." });
+    res.json({ text: response.text || generateFallbackResponse(message) });
   } catch (error: any) {
-    console.error("Gemini API Error:", error);
-    res.status(500).json({ error: "Erro ao processar consulta com Inteligência Artificial: " + error.message });
+    console.error("Gemini API Error (using fallback):", error?.message || error);
+    // Return graceful fallback response instead of 500 status code
+    res.json({ text: generateFallbackResponse(message) });
   }
 });
 

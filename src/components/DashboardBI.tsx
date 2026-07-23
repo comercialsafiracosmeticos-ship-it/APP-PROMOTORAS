@@ -17,6 +17,7 @@ interface DashboardBIProps {
   pedidos: Pedido[];
   metasVendas?: MetaVendaPromotora[];
   onSaveMetas?: (metas: MetaVendaPromotora[]) => void;
+  currentUser?: Promotora | null;
 }
 
 export default function DashboardBI({ 
@@ -26,7 +27,8 @@ export default function DashboardBI({
   produtos, 
   pedidos,
   metasVendas = [],
-  onSaveMetas 
+  onSaveMetas,
+  currentUser
 }: DashboardBIProps) {
   // Month Selection State
   const [selectedMesAno, setSelectedMesAno] = useState('2026-07');
@@ -35,13 +37,25 @@ export default function DashboardBI({
   const [alertFilter, setAlertFilter] = useState<'ALL' | '100' | '80'>('ALL');
   const [dismissedAlerts, setDismissedAlerts] = useState<string[]>([]);
 
+  const isPromotoraMode = currentUser?.role === 'Promotora';
+
   // Fallback default promotoras if empty prop
-  const activePromotoras = promotoras.length > 0 ? promotoras : [
+  const allPromotoras = promotoras.length > 0 ? promotoras : [
     { id: 'prom-01', nome: 'Jaqueline Vechi', codigoBling: 'PROM04', telefone: '', email: '', status: 'Ativa' as const, role: 'Promotora' as const },
     { id: 'prom-02', nome: 'Daniela Alves de Almeida', codigoBling: 'PROM05', telefone: '', email: '', status: 'Ativa' as const, role: 'Promotora' as const },
     { id: 'prom-03', nome: 'Vanessa Vicente', codigoBling: 'PROM06', telefone: '', email: '', status: 'Ativa' as const, role: 'Admin' as const },
     { id: 'prom-04', nome: 'Safira Cosméticos Admin', codigoBling: 'ADMIN01', telefone: '', email: '', status: 'Ativa' as const, role: 'Admin' as const }
   ];
+
+  // If Promotora is logged in, filter list to HER ONLY
+  const activePromotoras = isPromotoraMode && currentUser
+    ? allPromotoras.filter(p => p.id === currentUser.id || p.nome === currentUser.nome)
+    : allPromotoras;
+
+  // Filter visits for active user if in Promotora Mode
+  const filteredVisitas = isPromotoraMode && currentUser
+    ? visitas.filter(v => v.promotoraId === currentUser.id)
+    : visitas;
 
   // Map of targets by promotora ID for selected month
   const initialLocalMetas = activePromotoras.reduce((acc, p) => {

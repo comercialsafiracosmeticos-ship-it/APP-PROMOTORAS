@@ -4,7 +4,8 @@ import {
   Database, Wifi, Key, FileText, ShoppingBag, Users, Check,
   History, Search, ShieldCheck, FileCheck2, Clock, AlertOctagon,
   Download, Eye, X, Terminal, CheckCircle2, Layers, Server, Filter,
-  ArrowUpRight, Activity
+  ArrowUpRight, Activity, Edit2, Trash2, Trash, CheckSquare, Square,
+  Plus, AlertCircle
 } from 'lucide-react';
 import { BlingConfig, BlingSyncLog, Cliente, Pedido, Produto } from '../types';
 
@@ -17,6 +18,9 @@ interface BlingPanelProps {
   onTriggerSync: () => Promise<void>;
   syncing: boolean;
   onClearTestData?: () => void;
+  onUpdateCliente?: (cliente: Cliente) => void;
+  onDeleteCliente?: (id: string) => void;
+  onDeleteClientesBulk?: (ids: string[]) => void;
 }
 
 export default function BlingPanel({
@@ -27,7 +31,10 @@ export default function BlingPanel({
   onSaveConfig,
   onTriggerSync,
   syncing,
-  onClearTestData
+  onClearTestData,
+  onUpdateCliente,
+  onDeleteCliente,
+  onDeleteClientesBulk
 }: BlingPanelProps) {
   const [activeTab, setActiveTab] = useState<'status' | 'clientes' | 'pedidos' | 'produtos' | 'auditoria'>('status');
   const [apiKey, setApiKey] = useState(config.apiKey || '');
@@ -36,6 +43,24 @@ export default function BlingPanel({
   const [aliasServidor, setAliasServidor] = useState(config.aliasServidor || 'Safira Comercial Principal');
   const [webhookAtivo, setWebhookAtivo] = useState(!!config.webhookAtivo);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Client management states
+  const [clientSearch, setClientSearch] = useState('');
+  const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
+  const [editingClient, setEditingClient] = useState<Cliente | null>(null);
+  const [deletingClient, setDeletingClient] = useState<Cliente | null>(null);
+  const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
+  const [isWipeAllModalOpen, setIsWipeAllModalOpen] = useState(false);
+
+  const [editFormData, setEditFormData] = useState({
+    nome: '',
+    cnpj: '',
+    cidade: '',
+    endereco: '',
+    telefone: '',
+    produtosComprados: '',
+    faturamentoTotal: 0
+  });
 
   // Sync state whenever props from server change
   useEffect(() => {
@@ -410,55 +435,445 @@ export default function BlingPanel({
           </div>
         )}
 
-        {/* List of clients from Bling */}
-        {activeTab === 'clientes' && (
-          <div className="space-y-4">
-            <div className="flex justify-between items-center">
-              <div>
-                <h3 className="text-sm font-bold text-white">Clientes Importados do Bling</h3>
-                <p className="text-xs text-white/60">Total de clientes integrados para acompanhamento das promotoras</p>
-              </div>
-            </div>
+        {/* List of clients from Bling with Edit, Delete and Bulk Delete */}
+        {activeTab === 'clientes' && (() => {
+          const filteredClientesList = clientes.filter(c => {
+            if (!clientSearch) return true;
+            const term = clientSearch.toLowerCase();
+            return (
+              c.nome?.toLowerCase().includes(term) ||
+              c.cnpj?.toLowerCase().includes(term) ||
+              c.cidade?.toLowerCase().includes(term) ||
+              c.endereco?.toLowerCase().includes(term)
+            );
+          });
 
-            <div className="overflow-x-auto border border-white/10 rounded-xl">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="bg-[#1F1F22]/50 border-b border-white/10 text-white/60 font-bold">
-                    <th className="px-4 py-3">Cliente / PDV</th>
-                    <th className="px-4 py-3">CNPJ</th>
-                    <th className="px-4 py-3">Cidade / Localização</th>
-                    <th className="px-4 py-3">Produtos Comprados (Bling)</th>
-                    <th className="px-4 py-3 text-right">Faturamento Histórico</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {clientes.map((c) => (
-                    <tr key={c.id} className="hover:bg-white/5 transition-colors">
-                      <td className="px-4 py-3">
-                        <div className="font-semibold text-white">{c.nome}</div>
-                        <div className="text-[10px] text-white/40 mt-0.5">{c.endereco}</div>
-                      </td>
-                      <td className="px-4 py-3 font-mono text-white/60">{c.cnpj}</td>
-                      <td className="px-4 py-3 text-white/60">{c.cidade}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-1 max-w-sm">
-                          {c.produtosComprados.map((p, idx) => (
-                            <span key={idx} className="bg-white/5 text-white/80 text-[9px] px-1.5 py-0.5 rounded-md border border-white/10">
-                              {p}
-                            </span>
-                          ))}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-right font-semibold text-amber-400">
-                        {c.faturamentoTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                      </td>
+          const isAllSelected = filteredClientesList.length > 0 && filteredClientesList.every(c => selectedClientIds.includes(c.id));
+
+          const handleSelectAll = () => {
+            if (isAllSelected) {
+              setSelectedClientIds([]);
+            } else {
+              setSelectedClientIds(filteredClientesList.map(c => c.id));
+            }
+          };
+
+          const handleToggleSelectClient = (id: string) => {
+            setSelectedClientIds(prev => 
+              prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+            );
+          };
+
+          return (
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Users className="w-4 h-4 text-amber-400" />
+                    Clientes Cadastrados ({clientes.length})
+                  </h3>
+                  <p className="text-xs text-white/60 mt-0.5">
+                    Clientes integrados com a API do Bling ERP. Edite, remova individualmente ou faça exclusão em massa.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                  {selectedClientIds.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setIsBulkDeleteModalOpen(true)}
+                      className="bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                      Excluir Selecionados ({selectedClientIds.length})
+                    </button>
+                  )}
+
+                  {clientes.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setIsWipeAllModalOpen(true)}
+                      className="bg-white/5 hover:bg-rose-500/10 text-white/60 hover:text-rose-300 border border-white/10 hover:border-rose-500/30 px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+                      title="Excluir todos os clientes para recarregar limpo do Bling"
+                    >
+                      <Trash className="w-3.5 h-3.5" />
+                      Excluir Lista Inteira
+                    </button>
+                  )}
+
+                  <div className="relative w-full sm:w-64">
+                    <Search className="w-3.5 h-3.5 text-white/40 absolute left-3 top-2.5" />
+                    <input
+                      type="text"
+                      value={clientSearch}
+                      onChange={(e) => setClientSearch(e.target.value)}
+                      placeholder="Buscar cliente, CNPJ, cidade..."
+                      className="w-full text-xs pl-8 pr-3 py-2 rounded-xl bg-[#1F1F22] border border-white/10 text-white placeholder-white/40 focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Selection Summary Bar */}
+              {selectedClientIds.length > 0 && (
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-2.5 flex items-center justify-between text-xs text-amber-300 font-medium">
+                  <div className="flex items-center gap-2">
+                    <CheckSquare className="w-4 h-4 text-amber-400" />
+                    <span><strong>{selectedClientIds.length}</strong> cliente(s) selecionado(s) de {filteredClientesList.length}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedClientIds([])}
+                    className="text-white/60 hover:text-white underline text-[11px] cursor-pointer"
+                  >
+                    Desmarcar Todos
+                  </button>
+                </div>
+              )}
+
+              <div className="overflow-x-auto border border-white/10 rounded-xl">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-[#1F1F22]/80 border-b border-white/10 text-white/60 font-bold">
+                      <th className="px-3 py-3 w-10 text-center">
+                        <input
+                          type="checkbox"
+                          checked={isAllSelected}
+                          onChange={handleSelectAll}
+                          className="w-4 h-4 rounded border-white/20 bg-black/40 text-amber-500 focus:ring-amber-500/30 cursor-pointer"
+                          title="Selecionar Todos"
+                        />
+                      </th>
+                      <th className="px-4 py-3">Cliente / PDV</th>
+                      <th className="px-4 py-3">CNPJ</th>
+                      <th className="px-4 py-3">Cidade / Localização</th>
+                      <th className="px-4 py-3">Produtos Comprados (Bling)</th>
+                      <th className="px-4 py-3 text-right">Faturamento Histórico</th>
+                      <th className="px-4 py-3 text-center w-24">Ações</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {filteredClientesList.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="px-4 py-8 text-center text-white/40">
+                          {clientSearch ? 'Nenhum cliente encontrado para os termos pesquisados.' : 'Nenhum cliente cadastrado no momento. Clique em "Sincronizar Agora" para importar do Bling.'}
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredClientesList.map((c) => {
+                        const isSelected = selectedClientIds.includes(c.id);
+                        return (
+                          <tr key={c.id} className={`hover:bg-white/5 transition-colors ${isSelected ? 'bg-amber-500/10' : ''}`}>
+                            <td className="px-3 py-3 text-center">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => handleToggleSelectClient(c.id)}
+                                className="w-4 h-4 rounded border-white/20 bg-black/40 text-amber-500 focus:ring-amber-500/30 cursor-pointer"
+                              />
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="font-semibold text-white">{c.nome}</div>
+                              <div className="text-[10px] text-white/40 mt-0.5">{c.endereco}</div>
+                            </td>
+                            <td className="px-4 py-3 font-mono text-white/60">{c.cnpj}</td>
+                            <td className="px-4 py-3 text-white/60">{c.cidade}</td>
+                            <td className="px-4 py-3">
+                              <div className="flex flex-wrap gap-1 max-w-sm">
+                                {c.produtosComprados?.map((p, idx) => (
+                                  <span key={idx} className="bg-white/5 text-white/80 text-[9px] px-1.5 py-0.5 rounded-md border border-white/10">
+                                    {p}
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-right font-semibold text-amber-400">
+                              {(c.faturamentoTotal || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingClient(c);
+                                    setEditFormData({
+                                      nome: c.nome,
+                                      cnpj: c.cnpj,
+                                      cidade: c.cidade,
+                                      endereco: c.endereco,
+                                      telefone: c.telefone || '',
+                                      produtosComprados: c.produtosComprados ? c.produtosComprados.join(', ') : '',
+                                      faturamentoTotal: c.faturamentoTotal || 0
+                                    });
+                                  }}
+                                  title="Editar este cliente"
+                                  className="p-1.5 rounded-lg bg-white/5 hover:bg-amber-500/20 text-white/60 hover:text-amber-300 transition-all cursor-pointer"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setDeletingClient(c)}
+                                  title="Excluir este cliente"
+                                  className="p-1.5 rounded-lg bg-white/5 hover:bg-rose-500/20 text-white/60 hover:text-rose-400 transition-all cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Edit Client Modal */}
+              {editingClient && (
+                <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+                  <div className="bg-[#18181A] border border-white/10 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
+                    <div className="flex justify-between items-center border-b border-white/10 pb-3">
+                      <h3 className="font-bold text-white text-base flex items-center gap-2">
+                        <Edit2 className="w-4 h-4 text-amber-400" />
+                        Editar Cadastro de Cliente
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={() => setEditingClient(null)}
+                        className="text-white/40 hover:text-white p-1 rounded-lg cursor-pointer"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <form onSubmit={(e) => {
+                      e.preventDefault();
+                      if (!editingClient || !onUpdateCliente) return;
+                      const produtosArr = editFormData.produtosComprados
+                        .split(',')
+                        .map(p => p.trim())
+                        .filter(Boolean);
+
+                      onUpdateCliente({
+                        ...editingClient,
+                        nome: editFormData.nome,
+                        cnpj: editFormData.cnpj,
+                        cidade: editFormData.cidade,
+                        endereco: editFormData.endereco,
+                        telefone: editFormData.telefone,
+                        produtosComprados: produtosArr,
+                        faturamentoTotal: Number(editFormData.faturamentoTotal) || 0
+                      });
+                      setEditingClient(null);
+                    }} className="space-y-3 text-xs">
+                      <div>
+                        <label className="block text-white/60 font-semibold mb-1">Razão Social / Nome do Cliente</label>
+                        <input
+                          type="text"
+                          value={editFormData.nome}
+                          onChange={(e) => setEditFormData({ ...editFormData, nome: e.target.value })}
+                          required
+                          className="w-full bg-[#222226] border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-white/60 font-semibold mb-1">CNPJ / CPF</label>
+                          <input
+                            type="text"
+                            value={editFormData.cnpj}
+                            onChange={(e) => setEditFormData({ ...editFormData, cnpj: e.target.value })}
+                            className="w-full bg-[#222226] border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-white/60 font-semibold mb-1">Telefone / Contato</label>
+                          <input
+                            type="text"
+                            value={editFormData.telefone}
+                            onChange={(e) => setEditFormData({ ...editFormData, telefone: e.target.value })}
+                            className="w-full bg-[#222226] border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-white/60 font-semibold mb-1">Cidade / UF</label>
+                          <input
+                            type="text"
+                            value={editFormData.cidade}
+                            onChange={(e) => setEditFormData({ ...editFormData, cidade: e.target.value })}
+                            className="w-full bg-[#222226] border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-white/60 font-semibold mb-1">Faturamento Histórico (R$)</label>
+                          <input
+                            type="number"
+                            value={editFormData.faturamentoTotal}
+                            onChange={(e) => setEditFormData({ ...editFormData, faturamentoTotal: Number(e.target.value) })}
+                            className="w-full bg-[#222226] border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-white/60 font-semibold mb-1">Endereço Completo (Rua, Nº, Bairro)</label>
+                        <input
+                          type="text"
+                          value={editFormData.endereco}
+                          onChange={(e) => setEditFormData({ ...editFormData, endereco: e.target.value })}
+                          className="w-full bg-[#222226] border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-white/60 font-semibold mb-1">Linhas Compradas (separadas por vírgula)</label>
+                        <input
+                          type="text"
+                          value={editFormData.produtosComprados}
+                          onChange={(e) => setEditFormData({ ...editFormData, produtosComprados: e.target.value })}
+                          className="w-full bg-[#222226] border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500"
+                        />
+                      </div>
+
+                      <div className="flex justify-end gap-2 pt-3 border-t border-white/10">
+                        <button
+                          type="button"
+                          onClick={() => setEditingClient(null)}
+                          className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white font-semibold cursor-pointer"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-gray-950 font-bold cursor-pointer"
+                        >
+                          Salvar Alterações
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+
+              {/* Single Delete Confirmation Modal */}
+              {deletingClient && (
+                <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+                  <div className="bg-[#18181A] border border-rose-500/30 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+                    <div className="flex items-center gap-3 text-rose-400">
+                      <AlertTriangle className="w-6 h-6 shrink-0" />
+                      <h3 className="font-bold text-white text-base">Confirmar Exclusão de Cliente</h3>
+                    </div>
+                    <p className="text-xs text-white/70 leading-relaxed">
+                      Tem certeza que deseja excluir o cliente <strong>"{deletingClient.nome}"</strong>? Esta ação removerá o registro do sistema.
+                    </p>
+                    <div className="flex justify-end gap-2 pt-3 border-t border-white/10">
+                      <button
+                        type="button"
+                        onClick={() => setDeletingClient(null)}
+                        className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white font-semibold text-xs cursor-pointer"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (deletingClient && onDeleteCliente) {
+                            onDeleteCliente(deletingClient.id);
+                            setSelectedClientIds(prev => prev.filter(id => id !== deletingClient.id));
+                            setDeletingClient(null);
+                          }
+                        }}
+                        className="px-4 py-2 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs cursor-pointer"
+                      >
+                        Sim, Excluir Cliente
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Bulk Delete Confirmation Modal */}
+              {isBulkDeleteModalOpen && (
+                <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+                  <div className="bg-[#18181A] border border-rose-500/30 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+                    <div className="flex items-center gap-3 text-rose-400">
+                      <Trash2 className="w-6 h-6 shrink-0" />
+                      <h3 className="font-bold text-white text-base">Exclusão em Massa de Clientes</h3>
+                    </div>
+                    <p className="text-xs text-white/70 leading-relaxed">
+                      Você está prestes a excluir <strong>{selectedClientIds.length} clientes selecionados</strong>. Esta ação não poderá ser desfeita.
+                    </p>
+                    <div className="flex justify-end gap-2 pt-3 border-t border-white/10">
+                      <button
+                        type="button"
+                        onClick={() => setIsBulkDeleteModalOpen(false)}
+                        className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white font-semibold text-xs cursor-pointer"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (selectedClientIds.length > 0 && onDeleteClientesBulk) {
+                            onDeleteClientesBulk(selectedClientIds);
+                            setSelectedClientIds([]);
+                            setIsBulkDeleteModalOpen(false);
+                          }
+                        }}
+                        className="px-4 py-2 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs cursor-pointer"
+                      >
+                        Excluir {selectedClientIds.length} Clientes
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Wipe All Clients Modal */}
+              {isWipeAllModalOpen && (
+                <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+                  <div className="bg-[#18181A] border border-rose-500/40 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+                    <div className="flex items-center gap-3 text-rose-400">
+                      <AlertOctagon className="w-6 h-6 shrink-0" />
+                      <h3 className="font-bold text-white text-base">Excluir Todos os Clientes ({clientes.length})</h3>
+                    </div>
+                    <p className="text-xs text-white/70 leading-relaxed">
+                      Deseja remover <strong>todos os {clientes.length} clientes</strong> da lista atual? Isso é recomendado caso você queira limpar registros antigos/fictícios e sincronizar do zero diretamente da sua conta oficial do Bling.
+                    </p>
+                    <div className="flex justify-end gap-2 pt-3 border-t border-white/10">
+                      <button
+                        type="button"
+                        onClick={() => setIsWipeAllModalOpen(false)}
+                        className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white font-semibold text-xs cursor-pointer"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (clientes.length > 0 && onDeleteClientesBulk) {
+                            const allIds = clientes.map(c => c.id);
+                            onDeleteClientesBulk(allIds);
+                            setSelectedClientIds([]);
+                            setIsWipeAllModalOpen(false);
+                          }
+                        }}
+                        className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs cursor-pointer"
+                      >
+                        Confirmar Exclusão de Todos
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* List of orders from Bling */}
         {activeTab === 'pedidos' && (

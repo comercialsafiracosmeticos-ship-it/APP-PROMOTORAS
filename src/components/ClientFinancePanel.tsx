@@ -10,6 +10,7 @@ interface ClientFinancePanelProps {
   onAddCliente?: (cliente: Omit<Cliente, 'id'>) => void;
   onUpdateCliente?: (cliente: Cliente) => void;
   onDeleteCliente?: (id: string) => void;
+  onDeleteClientesBulk?: (ids: string[]) => void;
 }
 
 export default function ClientFinancePanel({ 
@@ -19,12 +20,15 @@ export default function ClientFinancePanel({
   syncing,
   onAddCliente,
   onUpdateCliente,
-  onDeleteCliente
+  onDeleteCliente,
+  onDeleteClientesBulk
 }: ClientFinancePanelProps) {
   const [search, setSearch] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
   const [clientToDelete, setClientToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
 
   // Form State
   const [formData, setFormData] = useState({

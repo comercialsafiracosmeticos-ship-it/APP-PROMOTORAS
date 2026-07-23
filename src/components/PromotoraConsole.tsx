@@ -979,19 +979,24 @@ export default function PromotoraConsole({
           }`}
         >
           <Calendar className="w-3.5 h-3.5 shrink-0" />
-          Histórico de Visitas ({visitas.filter(v => v.promotoraId === activePromotora.id).length})
+          Histórico de Visitas ({visitas.filter(v => activePromotora.role === 'Admin' ? true : v.promotoraId === activePromotora.id).length})
         </button>
-        <button
-          onClick={() => setActiveSubTab('equipe')}
-          className={`flex-1 min-w-[140px] py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-            activeSubTab === 'equipe'
-              ? 'bg-amber-500 text-gray-950 shadow-sm font-bold'
-              : 'text-white/60 hover:text-white hover:bg-white/5'
-          }`}
-        >
-          <Users className="w-3.5 h-3.5 shrink-0" />
-          Gerenciar Equipe
-        </button>
+
+        {/* GERENCIAR EQUIPE (RESTRICTED: ADMIN ONLY) */}
+        {activePromotora?.role === 'Admin' && (
+          <button
+            onClick={() => setActiveSubTab('equipe')}
+            className={`flex-1 min-w-[140px] py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              activeSubTab === 'equipe'
+                ? 'bg-amber-500 text-gray-950 shadow-sm font-bold'
+                : 'text-white/60 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <Users className="w-3.5 h-3.5 shrink-0" />
+            Gerenciar Equipe
+          </button>
+        )}
+
         <button
           onClick={() => setActiveSubTab('escalas')}
           className={`flex-1 min-w-[140px] py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
@@ -1025,17 +1030,21 @@ export default function PromotoraConsole({
           <TrendingUp className="w-3.5 h-3.5 shrink-0" />
           Relatórios de Produtividade
         </button>
-        <button
-          onClick={() => setActiveSubTab('config')}
-          className={`flex-1 min-w-[150px] py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-            activeSubTab === 'config'
-              ? 'bg-amber-500 text-gray-950 shadow-sm font-bold'
-              : 'text-white/60 hover:text-white hover:bg-white/5'
-          }`}
-        >
-          <Settings className="w-3.5 h-3.5 shrink-0" />
-          Configurações do App
-        </button>
+
+        {/* CONFIGURAÇÕES DO APP (RESTRICTED: ADMIN ONLY) */}
+        {activePromotora?.role === 'Admin' && (
+          <button
+            onClick={() => setActiveSubTab('config')}
+            className={`flex-1 min-w-[150px] py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              activeSubTab === 'config'
+                ? 'bg-amber-500 text-gray-950 shadow-sm font-bold'
+                : 'text-white/60 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <Settings className="w-3.5 h-3.5 shrink-0" />
+            Configurações do App
+          </button>
+        )}
       </div>
 
       {/* SUB TAB: CHECK-IN & AUDITORIA */}

@@ -56,7 +56,14 @@ export default function App() {
           setBlingConfig(store.blingConfig || {});
 
           if (store.promotoras && store.promotoras.length > 0) {
-            setActivePromotora(store.promotoras[0]);
+            const savedId = localStorage.getItem('safira_active_user_id');
+            const savedUser = store.promotoras.find((p: any) => p.id === savedId);
+            if (savedUser) {
+              setActivePromotora(savedUser);
+            } else {
+              const adminUser = store.promotoras.find((p: any) => p.role === 'Admin');
+              setActivePromotora(adminUser || store.promotoras[0]);
+            }
           }
         }
       } catch (e) {
@@ -67,6 +74,16 @@ export default function App() {
     }
     loadData();
   }, []);
+
+  const handleSelectUser = (user: Promotora) => {
+    setActivePromotora(user);
+    localStorage.setItem('safira_active_user_id', user.id);
+
+    // If switched to a Promotora and current tab is admin-only, redirect to PROMOTORA tab
+    if (user.role === 'Promotora' && ['CLIENTES', 'PEDIDOS', 'BLING'].includes(activeTab)) {
+      setActiveTab('PROMOTORA');
+    }
+  };
 
   // Update backend helper
   const saveToBackend = async (updatedStore: any) => {
@@ -343,6 +360,22 @@ export default function App() {
     });
   };
 
+  const handleDeleteClientesBulk = async (ids: string[]) => {
+    const updatedClientes = clientes.filter(c => !ids.includes(c.id));
+    setClientes(updatedClientes);
+
+    await saveToBackend({
+      promotoras,
+      clientes: updatedClientes,
+      produtos,
+      pedidos,
+      visitas,
+      escalas,
+      atestados,
+      blingConfig
+    });
+  };
+
   const handleAddPedido = async (newPedData: Omit<Pedido, 'id'>) => {
     const newPed: Pedido = {
       id: 'ped-' + Math.random().toString(36).substr(2, 9),
@@ -488,6 +521,9 @@ export default function App() {
         activeTab={activeTab} 
         setActiveTab={setActiveTab} 
         isStandaloneMode={isStandaloneMode} 
+        activeUser={activePromotora}
+        promotoras={promotoras}
+        onSelectUser={handleSelectUser}
       />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
@@ -553,6 +589,7 @@ export default function App() {
             onAddCliente={handleAddCliente}
             onUpdateCliente={handleUpdateCliente}
             onDeleteCliente={handleDeleteCliente}
+            onDeleteClientesBulk={handleDeleteClientesBulk}
           />
         )}
 
@@ -565,6 +602,7 @@ export default function App() {
             pedidos={pedidos}
             metasVendas={metasVendas}
             onSaveMetas={handleSaveMetas}
+            currentUser={activePromotora}
           />
         )}
 
@@ -593,6 +631,9 @@ export default function App() {
             onTriggerSync={handleTriggerBlingSync}
             syncing={syncing}
             onClearTestData={handleClearTestData}
+            onUpdateCliente={handleUpdateCliente}
+            onDeleteCliente={handleDeleteCliente}
+            onDeleteClientesBulk={handleDeleteClientesBulk}
           />
         )}
       </main>

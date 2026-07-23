@@ -132,7 +132,7 @@ export default function AISafiraAssistant() {
           </div>
         </div>
         <div className="px-2.5 py-0.5 bg-amber-500/10 text-[10px] text-amber-400 font-medium rounded-full border border-amber-500/20">
-          Gemini 2.5 Flash
+          Gemini 3.6 Flash
         </div>
       </div>
 
