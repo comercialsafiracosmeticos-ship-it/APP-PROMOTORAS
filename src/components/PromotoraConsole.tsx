@@ -5,7 +5,7 @@ import {
   FileText, TrendingUp, Settings, Plus, Trash2, Edit2, 
   Upload, Sparkles, User, AlertOctagon, Info, Eye, ArrowRight,
   Bell, Lock, Unlock, Compass, RefreshCw, UserCheck, Store, Phone,
-  Key, Copy, Send, LogIn, Share2
+  Key, Copy, Send, LogIn, Share2, Shield
 } from 'lucide-react';
 import { 
   Promotora, Cliente, Visita, Escala, Atestado, Produto, AuditoriaItem, ProdutoVencer, AnaliseConcorrente 
@@ -60,6 +60,18 @@ export default function PromotoraConsole({
   syncing
 }: PromotoraConsoleProps) {
   const [activeSubTab, setActiveSubTab] = useState<'checkin' | 'historico' | 'equipe' | 'escalas' | 'atestados' | 'produtividade' | 'config'>('checkin');
+
+  // Safeguard: Ensure non-admin users cannot stay in restricted subtabs ('equipe' and 'config')
+  useEffect(() => {
+    if (activePromotora?.role !== 'Admin' && (activeSubTab === 'equipe' || activeSubTab === 'config')) {
+      setActiveSubTab('checkin');
+      triggerPushAlert(
+        'Acesso Restrito',
+        'As abas Gerenciar Equipe e Configurações do App são exclusivas para usuários com perfil de Administrador.',
+        'warning'
+      );
+    }
+  }, [activePromotora?.role, activeSubTab]);
 
   // --- 1. CHECK-IN / AUDITORIA STATE ---
   const [selectedClienteId, setSelectedClienteId] = useState('');
@@ -3239,10 +3251,43 @@ export default function PromotoraConsole({
       {/* SUB TAB: CONFIGURAÇÕES DO APP */}
       {activeSubTab === 'config' && (
         <div className="bg-[#161618] rounded-2xl border border-white/10 p-6 space-y-6 shadow-lg">
-          <div>
-            <h3 className="font-display font-bold text-base text-white">Configurações Gerais do Aplicativo</h3>
-            <p className="text-xs text-white/60">Gerencie o escopo e o modo de exibição das telas do sistema de acordo com a sua necessidade de uso.</p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
+            <div>
+              <h3 className="font-display font-bold text-base text-white flex items-center gap-2">
+                Configurações Gerais do Aplicativo
+                <span className={`text-[10px] px-2 py-0.5 rounded font-mono font-bold ${
+                  activePromotora?.role === 'Admin'
+                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                    : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                }`}>
+                  {activePromotora?.role === 'Admin' ? 'Acesso Administrativo Liberado' : 'Acesso Restrito - Somente Leitura'}
+                </span>
+              </h3>
+              <p className="text-xs text-white/60">Gerencie o escopo e o modo de exibição das telas do sistema de acordo com os parâmetros globais.</p>
+            </div>
+
+            <div className="bg-[#1F1F22] border border-white/10 px-3 py-2 rounded-xl text-xs space-y-1 shrink-0">
+              <div className="text-[10px] text-white/50 font-mono flex items-center gap-1">
+                <Shield className="w-3 h-3 text-amber-400" />
+                <span>Perfil Ativo: <strong className="text-white">{activePromotora?.nome}</strong> ({activePromotora?.role})</span>
+              </div>
+              <div className="text-[10px] text-emerald-400 font-mono">
+                ✓ Persistência de Sessão Segura Ativa
+              </div>
+            </div>
           </div>
+
+          {activePromotora?.role !== 'Admin' && (
+            <div className="bg-rose-950/40 border border-rose-500/40 p-4 rounded-xl flex items-center gap-3 text-xs text-rose-200">
+              <Lock className="w-5 h-5 text-rose-400 shrink-0" />
+              <div>
+                <p className="font-bold">Validação de Segurança de Perfil</p>
+                <p className="text-[11px] text-rose-300/80">
+                  Sua conta atual ({activePromotora?.email || activePromotora?.nome}) está registrada como <strong>{activePromotora?.role}</strong>. A alteração de parâmetros globais do aplicativo (como alternar entre Modo Standalone e Portal Multimodular) é restrita exclusivamente a usuários com perfil <strong>Admin</strong>.
+                </p>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Standalone */}
@@ -3265,13 +3310,32 @@ export default function PromotoraConsole({
 
               <button
                 type="button"
-                onClick={() => setIsStandaloneMode(true)}
-                className={`w-full font-bold py-2.5 rounded-xl text-xs transition-all cursor-pointer ${
-                  isStandaloneMode
+                onClick={() => {
+                  if (activePromotora?.role !== 'Admin') {
+                    triggerPushAlert(
+                      'Acesso Negado',
+                      'Apenas usuários com perfil de Administrador podem alterar as configurações globais do aplicativo.',
+                      'warning'
+                    );
+                    return;
+                  }
+                  setIsStandaloneMode(true);
+                  triggerPushAlert(
+                    'Modo Alterado',
+                    'Aplicativo alternado para o Modo Standalone de Promotoras.',
+                    'success'
+                  );
+                }}
+                disabled={activePromotora?.role !== 'Admin'}
+                className={`w-full font-bold py-2.5 rounded-xl text-xs transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                  activePromotora?.role !== 'Admin'
+                    ? 'bg-gray-800 text-white/40 border border-white/5 cursor-not-allowed'
+                    : isStandaloneMode
                     ? 'bg-amber-500 text-gray-950 shadow-md shadow-amber-500/10 hover:bg-amber-600'
                     : 'bg-[#1F1F22] hover:bg-white/5 border border-white/10 text-white'
                 }`}
               >
+                {activePromotora?.role !== 'Admin' && <Lock className="w-3.5 h-3.5 text-rose-400" />}
                 Ativar Modo Promotoras Standalone
               </button>
             </div>
@@ -3296,13 +3360,32 @@ export default function PromotoraConsole({
 
               <button
                 type="button"
-                onClick={() => setIsStandaloneMode(false)}
-                className={`w-full font-bold py-2.5 rounded-xl text-xs transition-all cursor-pointer ${
-                  !isStandaloneMode
+                onClick={() => {
+                  if (activePromotora?.role !== 'Admin') {
+                    triggerPushAlert(
+                      'Acesso Negado',
+                      'Apenas usuários com perfil de Administrador podem alterar as configurações globais do aplicativo.',
+                      'warning'
+                    );
+                    return;
+                  }
+                  setIsStandaloneMode(false);
+                  triggerPushAlert(
+                    'Modo Alterado',
+                    'Aplicativo alternado para o Portal Comercial Multimodular Completo.',
+                    'success'
+                  );
+                }}
+                disabled={activePromotora?.role !== 'Admin'}
+                className={`w-full font-bold py-2.5 rounded-xl text-xs transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                  activePromotora?.role !== 'Admin'
+                    ? 'bg-gray-800 text-white/40 border border-white/5 cursor-not-allowed'
+                    : !isStandaloneMode
                     ? 'bg-amber-500 text-gray-950 shadow-md shadow-amber-500/10 hover:bg-amber-600'
                     : 'bg-[#1F1F22] hover:bg-white/5 border border-white/10 text-white'
                 }`}
               >
+                {activePromotora?.role !== 'Admin' && <Lock className="w-3.5 h-3.5 text-rose-400" />}
                 Ativar Modo Multimodular Completo
               </button>
             </div>

@@ -5,15 +5,21 @@ import BlingPanel from './components/BlingPanel';
 import ClientFinancePanel from './components/ClientFinancePanel';
 import DashboardBI from './components/DashboardBI';
 import SalesOrdersPanel from './components/SalesOrdersPanel';
+import AuthModal from './components/AuthModal';
 import { 
   Promotora, Cliente, Pedido, Produto, Visita, Escala, Atestado, BlingConfig, MetaVendaPromotora 
 } from './types';
 import { Sparkles, Compass, AlertCircle, ShoppingBag, Loader2, ArrowRight } from 'lucide-react';
+import { auth, onAuthStateChanged, testFirestoreConnection, FirebaseUser } from './lib/firebase';
 
 export default function App() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('PROMOTORA');
   const [isStandaloneMode, setIsStandaloneMode] = useState(false);
+
+  // Firebase Auth & Modal state
+  const [authUser, setAuthUser] = useState<FirebaseUser | null>(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   // States
   const [promotoras, setPromotoras] = useState<Promotora[]>([]);
@@ -37,6 +43,40 @@ export default function App() {
   const [activePromotora, setActivePromotora] = useState<Promotora | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncNotice, setSyncNotice] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  // Initialize Firebase Auth listener
+  useEffect(() => {
+    testFirestoreConnection();
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setAuthUser(user);
+      if (user && user.email) {
+        // Sync user profile if email matches
+        setPromotoras(prevProms => {
+          if (prevProms.length > 0) {
+            const matched = prevProms.find(p => p.email?.toLowerCase() === user.email?.toLowerCase());
+            if (matched) {
+              setActivePromotora(matched);
+              localStorage.setItem('safira_active_user_id', matched.id);
+            }
+          }
+          return prevProms;
+        });
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Safeguard: Restrict tabs 'CLIENTES' (Clientes & Financeiro), 'PEDIDOS' (Pedidos), and 'BLING' (Bling) to Admin only
+  useEffect(() => {
+    if (activePromotora?.role !== 'Admin' && ['CLIENTES', 'PEDIDOS', 'BLING'].includes(activeTab)) {
+      setActiveTab('PROMOTORA');
+      setSyncNotice({
+        message: 'Acesso Restrito: As abas Clientes, Financeiro, Pedidos e Bling são exclusivas para Administradores.',
+        type: 'error'
+      });
+      setTimeout(() => setSyncNotice(null), 6000);
+    }
+  }, [activePromotora?.role, activeTab]);
 
   // Load from backend
   useEffect(() => {
@@ -524,6 +564,8 @@ export default function App() {
         activeUser={activePromotora}
         promotoras={promotoras}
         onSelectUser={handleSelectUser}
+        onOpenAuthModal={() => setShowAuthModal(true)}
+        authUser={authUser}
       />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
@@ -637,6 +679,15 @@ export default function App() {
           />
         )}
       </main>
+
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        authUser={authUser}
+        activePromotora={activePromotora}
+        promotoras={promotoras}
+        onSelectUser={handleSelectUser}
+      />
     </div>
   );
 }

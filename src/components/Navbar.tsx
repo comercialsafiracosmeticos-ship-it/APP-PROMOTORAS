@@ -1,6 +1,7 @@
-import { Link2, Sparkles, LogOut, CheckCircle2, Menu, X, Landmark, Compass, Calendar, ShoppingBag, Shield, User, ChevronDown, Lock } from 'lucide-react';
+import { Link2, Sparkles, LogOut, CheckCircle2, Menu, X, Landmark, Compass, Calendar, ShoppingBag, Shield, User, ChevronDown, Lock, Key } from 'lucide-react';
 import { useState, FormEvent } from 'react';
 import { Promotora } from '../types';
+import { FirebaseUser } from '../lib/firebase';
 
 interface NavbarProps {
   activeTab: string;
@@ -9,6 +10,8 @@ interface NavbarProps {
   activeUser: Promotora | null;
   promotoras: Promotora[];
   onSelectUser: (user: Promotora) => void;
+  onOpenAuthModal?: () => void;
+  authUser?: FirebaseUser | null;
 }
 
 export default function Navbar({ 
@@ -17,7 +20,9 @@ export default function Navbar({
   isStandaloneMode,
   activeUser,
   promotoras,
-  onSelectUser
+  onSelectUser,
+  onOpenAuthModal,
+  authUser
 }: NavbarProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showSwitchModal, setShowSwitchModal] = useState(false);
@@ -28,8 +33,9 @@ export default function Navbar({
   const isAdmin = activeUser?.role === 'Admin';
 
   // Role-Based Tabs Filter:
-  // - Admin sees ALL 5 modules: Promotoras, Clientes & Financeiro, Dashboard, Pedidos, Bling
-  // - Promotoras see ONLY: Promotoras & PDV and Dashboard de BI (seus resultados)
+  // - Admin sees ALL modules: Promotoras & PDV, Clientes & Financeiro, Dashboard, Pedidos de Vendas, Painel Bling v3
+  // - Promotoras see ONLY: Promotoras & PDV and Dashboard de BI (visitas/metas)
+  // Restricted for non-admins: 'CLIENTES' (Clientes/Financeiro), 'PEDIDOS' (Pedidos), 'BLING' (Bling)
   const allTabs = [
     { id: 'PROMOTORA', label: 'Promotoras & PDV', icon: Compass, adminOnly: false },
     { id: 'CLIENTES', label: 'Clientes & Financeiro', icon: Landmark, adminOnly: true },
@@ -119,13 +125,31 @@ export default function Navbar({
             })}
           </nav>
 
-          {/* User Profile / Switcher Button */}
-          <div className="hidden sm:flex items-center gap-3">
+          {/* User Profile / Switcher Button & Firebase Auth Trigger */}
+          <div className="hidden sm:flex items-center gap-2">
+            {onOpenAuthModal && (
+              <button
+                type="button"
+                onClick={onOpenAuthModal}
+                className="flex items-center gap-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm"
+                title="Abrir gerenciador de login Firebase Auth"
+              >
+                <Shield className="w-3.5 h-3.5" />
+                <span>Firebase Auth</span>
+              </button>
+            )}
+
             <button
               type="button"
-              onClick={() => setShowSwitchModal(true)}
+              onClick={() => {
+                if (onOpenAuthModal) {
+                  onOpenAuthModal();
+                } else {
+                  setShowSwitchModal(true);
+                }
+              }}
               className="flex items-center gap-2.5 bg-[#1F1F22] hover:bg-[#28282C] border border-white/10 hover:border-amber-500/40 px-3 py-1.5 rounded-xl transition-all cursor-pointer group text-left"
-              title="Clique para alternar perfil de login ou trocar usuário"
+              title="Clique para alternar perfil de login ou trocar usuário no Firebase Auth"
             >
               <div className="w-7 h-7 rounded-lg overflow-hidden bg-amber-500/20 border border-amber-500/30 shrink-0 flex items-center justify-center text-amber-400 font-bold text-xs">
                 {activeUser?.avatar ? (
@@ -140,7 +164,7 @@ export default function Navbar({
                   <ChevronDown className="w-3 h-3 text-white/40 group-hover:text-amber-400 transition-colors" />
                 </div>
                 <div className="text-[10px] text-amber-400/90 font-mono flex items-center gap-1">
-                  {isAdmin ? <Shield className="w-2.5 h-2.5" /> : <User className="w-2.5 h-2.5" />}
+                  {isAdmin ? <Shield className="w-2.5 h-2.5 text-amber-400" /> : <User className="w-2.5 h-2.5 text-emerald-400" />}
                   <span>{isAdmin ? 'Administrador' : 'Promotora de Vendas'}</span>
                 </div>
               </div>
