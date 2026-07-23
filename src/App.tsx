@@ -6,7 +6,7 @@ import ClientFinancePanel from './components/ClientFinancePanel';
 import DashboardBI from './components/DashboardBI';
 import SalesOrdersPanel from './components/SalesOrdersPanel';
 import { 
-  Promotora, Cliente, Pedido, Produto, Visita, Escala, Atestado, BlingConfig 
+  Promotora, Cliente, Pedido, Produto, Visita, Escala, Atestado, BlingConfig, MetaVendaPromotora 
 } from './types';
 import { Sparkles, Compass, AlertCircle, ShoppingBag, Loader2, ArrowRight } from 'lucide-react';
 
@@ -23,6 +23,7 @@ export default function App() {
   const [visitas, setVisitas] = useState<Visita[]>([]);
   const [escalas, setEscalas] = useState<Escala[]>([]);
   const [atestados, setAtestados] = useState<Atestado[]>([]);
+  const [metasVendas, setMetasVendas] = useState<MetaVendaPromotora[]>([]);
   const [blingConfig, setBlingConfig] = useState<BlingConfig>({
     apiKey: '',
     clientId: '',
@@ -51,6 +52,7 @@ export default function App() {
           setVisitas(store.visitas || []);
           setEscalas(store.escalas || []);
           setAtestados(store.atestados || []);
+          setMetasVendas(store.metasVendas || []);
           setBlingConfig(store.blingConfig || {});
 
           if (store.promotoras && store.promotoras.length > 0) {
@@ -246,9 +248,34 @@ export default function App() {
     });
   };
 
+  const handleSaveMetas = async (updatedMetas: MetaVendaPromotora[]) => {
+    setMetasVendas(updatedMetas);
+    await saveToBackend({
+      promotoras,
+      clientes,
+      produtos,
+      pedidos,
+      visitas,
+      escalas,
+      atestados,
+      metasVendas: updatedMetas,
+      blingConfig
+    });
+  };
+
   const handleSaveBlingConfig = async (updated: Partial<BlingConfig>) => {
     const updatedConfig = { ...blingConfig, ...updated };
     setBlingConfig(updatedConfig);
+
+    try {
+      await fetch('/api/bling/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedConfig)
+      });
+    } catch (e) {
+      console.error("Error posting /api/bling/config", e);
+    }
 
     await saveToBackend({
       promotoras,
@@ -258,6 +285,7 @@ export default function App() {
       visitas,
       escalas,
       atestados,
+      metasVendas,
       blingConfig: updatedConfig
     });
   };
@@ -372,44 +400,40 @@ export default function App() {
     setSyncing(true);
     try {
       const res = await fetch('/api/bling/sync', { method: 'POST' });
-      if (res.ok) {
-        const data = await res.json();
-        const updatedConfig = data.blingConfig || {
-          ...blingConfig,
-          statusConexao: 'Conectado',
-          ultimoSincronismo: data.ultimoSincronismo
-        };
-        setBlingConfig(updatedConfig);
-        setClientes(data.clientes || clientes);
-        setPedidos(data.pedidos || pedidos);
-        setProdutos(data.produtos || produtos);
+      const data = await res.json();
+      
+      if (data.blingConfig) setBlingConfig(data.blingConfig);
+      if (data.clientes) setClientes(data.clientes);
+      if (data.pedidos) setPedidos(data.pedidos);
+      if (data.produtos) setProdutos(data.produtos);
 
-        // Save immediately to backend/Firestore
-        await saveToBackend({
-          promotoras,
-          clientes: data.clientes || clientes,
-          produtos: data.produtos || produtos,
-          pedidos: data.pedidos || pedidos,
-          visitas,
-          escalas,
-          atestados,
-          blingConfig: updatedConfig
-        });
+      // Save immediately to backend/Firestore
+      await saveToBackend({
+        promotoras,
+        clientes: data.clientes || clientes,
+        produtos: data.produtos || produtos,
+        pedidos: data.pedidos || pedidos,
+        visitas,
+        escalas,
+        atestados,
+        blingConfig: data.blingConfig || blingConfig
+      });
 
+      if (res.ok && data.success) {
         setSyncNotice({
-          message: data.message || `Sincronização com o Bling ERP realizada com sucesso! ${data.clientes?.length || 0} clientes/PDVs atualizados e salvos no banco de dados.`,
+          message: data.message || `Sincronização com o Bling ERP realizada com sucesso!`,
           type: 'success'
         });
       } else {
         setSyncNotice({
-          message: 'Erro ao conectar com o serviço do Bling ERP.',
+          message: data.message || 'Não foi possível importar do Bling. Verifique se seu Access Token / API Key do Bling está preenchido e válido.',
           type: 'error'
         });
       }
     } catch (e) {
       console.error("Failed to sync with Bling ERP", e);
       setSyncNotice({
-        message: 'Erro inesperado ao sincronizar com o Bling ERP.',
+        message: 'Erro de conexão ao sincronizar com o Bling ERP.',
         type: 'error'
       });
     } finally {
@@ -417,6 +441,35 @@ export default function App() {
       setTimeout(() => {
         setSyncNotice(null);
       }, 7000);
+    }
+  };
+
+  const handleClearTestData = async () => {
+    try {
+      const res = await fetch('/api/bling/clear-test-data', { method: 'POST' });
+      const data = await res.json();
+      if (data.pedidos) setPedidos(data.pedidos);
+      if (data.clientes) setClientes(data.clientes);
+      
+      await saveToBackend({
+        promotoras,
+        clientes: data.clientes || clientes,
+        produtos,
+        pedidos: data.pedidos || pedidos,
+        visitas,
+        escalas,
+        atestados,
+        blingConfig
+      });
+
+      setSyncNotice({
+        message: data.message || 'Pedidos de teste removidos com sucesso!',
+        type: 'success'
+      });
+    } catch (e) {
+      console.error("Failed to clear test data", e);
+    } finally {
+      setTimeout(() => setSyncNotice(null), 5000);
     }
   };
 
@@ -505,10 +558,13 @@ export default function App() {
 
         {activeTab === 'DASHBOARD' && !isStandaloneMode && (
           <DashboardBI
+            promotoras={promotoras}
             clientes={clientes}
             visitas={visitas}
             produtos={produtos}
             pedidos={pedidos}
+            metasVendas={metasVendas}
+            onSaveMetas={handleSaveMetas}
           />
         )}
 
@@ -520,6 +576,7 @@ export default function App() {
             ultimoSincronismo={blingConfig.ultimoSincronismo}
             onSyncBling={handleTriggerBlingSync}
             syncing={syncing}
+            onClearTestData={handleClearTestData}
             onAddPedido={handleAddPedido}
             onUpdatePedido={handleUpdatePedido}
             onDeletePedido={handleDeletePedido}
@@ -535,6 +592,7 @@ export default function App() {
             onSaveConfig={handleSaveBlingConfig}
             onTriggerSync={handleTriggerBlingSync}
             syncing={syncing}
+            onClearTestData={handleClearTestData}
           />
         )}
       </main>

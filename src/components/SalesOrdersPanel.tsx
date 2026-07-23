@@ -14,6 +14,7 @@ interface SalesOrdersPanelProps {
   ultimoSincronismo?: string;
   onSyncBling?: () => void;
   syncing?: boolean;
+  onClearTestData?: () => void;
   onAddPedido?: (p: Omit<Pedido, 'id'>) => void;
   onUpdatePedido?: (p: Pedido) => void;
   onDeletePedido?: (id: string) => void;
@@ -26,6 +27,7 @@ export default function SalesOrdersPanel({
   ultimoSincronismo,
   onSyncBling,
   syncing,
+  onClearTestData,
   onAddPedido,
   onUpdatePedido,
   onDeletePedido
@@ -209,6 +211,18 @@ export default function SalesOrdersPanel({
             >
               <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
               {syncing ? 'Sincronizando com Bling...' : 'Sincronizar Pedidos com Bling ERP'}
+            </button>
+          )}
+
+          {onClearTestData && pedidos.some(p => p.id.startsWith('ped-sync-') || p.id.startsWith('ped-0')) && (
+            <button
+              type="button"
+              onClick={onClearTestData}
+              className="w-full md:w-auto bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 font-bold px-3 py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+              title="Remover pedidos fictícios de teste do sistema"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Limpar Pedidos de Teste
             </button>
           )}
 

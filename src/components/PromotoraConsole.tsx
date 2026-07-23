@@ -4,7 +4,8 @@ import {
   CheckCircle, MapPin, Camera, Clock, Calendar, Users, 
   FileText, TrendingUp, Settings, Plus, Trash2, Edit2, 
   Upload, Sparkles, User, AlertOctagon, Info, Eye, ArrowRight,
-  Bell, Lock, Unlock, Compass, RefreshCw, UserCheck, Store, Phone
+  Bell, Lock, Unlock, Compass, RefreshCw, UserCheck, Store, Phone,
+  Key, Copy, Send, LogIn, Share2
 } from 'lucide-react';
 import { 
   Promotora, Cliente, Visita, Escala, Atestado, Produto, AuditoriaItem, ProdutoVencer, AnaliseConcorrente 
@@ -219,6 +220,28 @@ export default function PromotoraConsole({
   const [newPromTel, setNewPromTel] = useState('');
   const [newPromEmail, setNewPromEmail] = useState('');
   const [newPromRole, setNewPromRole] = useState<'Promotora' | 'Admin'>('Promotora');
+  const [newPromUsuario, setNewPromUsuario] = useState('');
+  const [newPromSenha, setNewPromSenha] = useState('');
+
+  // Editing Promotora state
+  const [editingPromotora, setEditingPromotora] = useState<Promotora | null>(null);
+  const [editPromNome, setEditPromNome] = useState('');
+  const [editPromBling, setEditPromBling] = useState('');
+  const [editPromTel, setEditPromTel] = useState('');
+  const [editPromEmail, setEditPromEmail] = useState('');
+  const [editPromRole, setEditPromRole] = useState<'Promotora' | 'Admin' | 'Representante'>('Promotora');
+  const [editPromStatus, setEditPromStatus] = useState<'Ativa' | 'Inativa'>('Ativa');
+  const [editPromUsuario, setEditPromUsuario] = useState('');
+  const [editPromSenha, setEditPromSenha] = useState('');
+  const [editPromAvatar, setEditPromAvatar] = useState('');
+
+  // Credentials and Login Modals state
+  const [credentialsModalPromotora, setCredentialsModalPromotora] = useState<Promotora | null>(null);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [loginUsuarioInput, setLoginUsuarioInput] = useState('');
+  const [loginSenhaInput, setLoginSenhaInput] = useState('');
+  const [loginErrorMessage, setLoginErrorMessage] = useState('');
+  const [copiedToast, setCopiedToast] = useState(false);
 
   // --- 3. MONTAR ESCALA STATE ---
   const [escPromId, setEscPromId] = useState('');
@@ -640,16 +663,126 @@ export default function PromotoraConsole({
     setAnaliseConcorrencia([...analiseConcorrencia, newItem]);
   };
 
+  // Helper to generate credentials automatically
+  const generateCredentials = (nome: string) => {
+    if (!nome) return { usuario: '', senha: '' };
+    const parts = nome.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/\s+/);
+    let usuario = '';
+    if (parts.length === 1) {
+      usuario = parts[0];
+    } else {
+      usuario = `${parts[0]}.${parts[parts.length - 1]}`;
+    }
+    const randNum = Math.floor(1000 + Math.random() * 9000);
+    const senha = `safira${randNum}`;
+    return { usuario, senha };
+  };
+
+  const handleSendCredentialsWhatsApp = (p: Promotora) => {
+    const cleanPhone = (p.telefone || '').replace(/\D/g, '');
+    const fullPhone = cleanPhone.length === 11 ? `55${cleanPhone}` : cleanPhone.length === 10 ? `55${cleanPhone}` : '5527999999999';
+    const text = encodeURIComponent(
+      `*Portal Safira Cosméticos - Dados de Acesso*\n\n` +
+      `Olá, *${p.nome}*!\n\n` +
+      `Seguem os seus dados de acesso ao Portal Comercial de Promotoras:\n\n` +
+      `👤 *Usuário/Login:* ${p.usuario || p.email}\n` +
+      `🔑 *Senha de Acesso:* ${p.senha || 'safira123'}\n` +
+      `🆔 *Código Bling:* ${p.codigoBling}\n\n` +
+      `Acesse o portal para realizar seus check-ins de gôndola e registros de ponto.\n` +
+      `Qualquer dúvida, entre em contato com a supervisão.`
+    );
+    window.open(`https://wa.me/${fullPhone}?text=${text}`, '_blank');
+  };
+
+  const handleSendCredentialsEmail = (p: Promotora) => {
+    const subject = encodeURIComponent("Seu Acesso ao Portal Safira Cosméticos");
+    const body = encodeURIComponent(
+      `Olá ${p.nome},\n\n` +
+      `Aqui estão os seus dados de acesso ao Portal Comercial Safira Cosméticos:\n\n` +
+      `Usuário: ${p.usuario || p.email}\n` +
+      `Senha: ${p.senha || 'safira123'}\n` +
+      `Código Bling: ${p.codigoBling}\n\n` +
+      `Atenciosamente,\nSafira Cosméticos`
+    );
+    window.open(`mailto:${p.email}?subject=${subject}&body=${body}`, '_blank');
+  };
+
+  const handleCopyCredentials = (p: Promotora) => {
+    const text = `PROMOTORA: ${p.nome}\nUSUÁRIO: ${p.usuario || p.email}\nSENHA: ${p.senha || 'safira123'}\nCÓDIGO BLING: ${p.codigoBling}`;
+    navigator.clipboard.writeText(text);
+    setCopiedToast(true);
+    setTimeout(() => setCopiedToast(false), 3000);
+  };
+
+  const handlePromotoraLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginErrorMessage('');
+    const userInput = loginUsuarioInput.trim().toLowerCase();
+    const passInput = loginSenhaInput.trim();
+
+    const matched = promotoras.find(p => 
+      (p.usuario?.toLowerCase() === userInput || p.email.toLowerCase() === userInput || p.codigoBling.toLowerCase() === userInput) &&
+      (p.senha ? p.senha === passInput : passInput === 'safira123' || passInput === '123456')
+    );
+
+    if (matched) {
+      setActivePromotora(matched);
+      setShowLoginModal(false);
+      setLoginUsuarioInput('');
+      setLoginSenhaInput('');
+      triggerPushAlert('✅ Login Efetuado!', `Bem-vinda, ${matched.nome}! Seu perfil está ativo.`, 'success');
+    } else {
+      setLoginErrorMessage('Usuário ou senha incorretos. Verifique suas credenciais ou contate o administrador.');
+    }
+  };
+
+  const handleStartEditPromotora = (p: Promotora) => {
+    setEditingPromotora(p);
+    setEditPromNome(p.nome);
+    setEditPromBling(p.codigoBling);
+    setEditPromTel(p.telefone);
+    setEditPromEmail(p.email);
+    setEditPromRole(p.role || 'Promotora');
+    setEditPromStatus(p.status || 'Ativa');
+    setEditPromUsuario(p.usuario || p.email.split('@')[0]);
+    setEditPromSenha(p.senha || 'safira123');
+    setEditPromAvatar(p.avatar || '');
+  };
+
+  const handleSaveEditPromotoraSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPromotora) return;
+
+    await onUpdatePromotora(editingPromotora.id, {
+      nome: editPromNome,
+      codigoBling: editPromBling,
+      telefone: editPromTel,
+      email: editPromEmail,
+      role: editPromRole,
+      status: editPromStatus,
+      usuario: editPromUsuario,
+      senha: editPromSenha,
+      avatar: editPromAvatar
+    });
+
+    setEditingPromotora(null);
+    triggerPushAlert('✏️ Promotora Atualizada!', `Os dados e credenciais de ${editPromNome} foram salvos com sucesso.`, 'success');
+  };
+
   // Handle adding a promotora
   const handleAddPromotoraSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPromNome || !newPromEmail) return;
+
+    const autoCreds = generateCredentials(newPromNome);
 
     await onAddPromotora({
       nome: newPromNome,
       codigoBling: newPromBling || 'PROM' + Math.floor(Math.random() * 100),
       telefone: newPromTel || '(27) 99999-9999',
       email: newPromEmail,
+      usuario: newPromUsuario || autoCreds.usuario,
+      senha: newPromSenha || autoCreds.senha,
       status: 'Ativa',
       role: newPromRole,
       avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'
@@ -659,7 +792,10 @@ export default function PromotoraConsole({
     setNewPromBling('');
     setNewPromTel('');
     setNewPromEmail('');
+    setNewPromUsuario('');
+    setNewPromSenha('');
     setShowAddPromForm(false);
+    triggerPushAlert('👤 Promotora Cadastrada!', `Promotora ${newPromNome} cadastrada com sucesso com usuário '${newPromUsuario || autoCreds.usuario}'.`, 'success');
   };
 
   // Schedule / Escala submit
@@ -795,8 +931,17 @@ export default function PromotoraConsole({
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5 bg-[#1F1F22] p-2 rounded-xl border border-white/10 shadow-sm shrink-0 self-start md:self-auto">
-          <span className="text-[10px] font-bold text-white/40 uppercase tracking-wider">Selecionar Promotora:</span>
+        <div className="flex flex-wrap items-center gap-2.5 bg-[#1F1F22] p-2 rounded-xl border border-white/10 shadow-sm shrink-0 self-start md:self-auto">
+          <button
+            onClick={() => setShowLoginModal(true)}
+            className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+            title="Entrar com Usuário e Senha"
+          >
+            <LogIn className="w-3.5 h-3.5" />
+            Entrar c/ Senha
+          </button>
+
+          <span className="text-[10px] font-bold text-white/40 uppercase tracking-wider hidden sm:inline">Perfil:</span>
           <select
             value={activePromotora.id}
             onChange={(e) => {
@@ -2048,7 +2193,7 @@ export default function PromotoraConsole({
           <div className="flex justify-between items-center">
             <div>
               <h3 className="font-display font-bold text-base text-white">Gerenciamento de Equipe & Perfis</h3>
-              <p className="text-xs text-white/60">Cadastre e configure logins de acesso das promotoras de venda do Espírito Santo.</p>
+              <p className="text-xs text-white/60">Cadastre, edite e configure logins e senhas de acesso das promotoras de venda do Espírito Santo.</p>
             </div>
             <button
               onClick={() => setShowAddPromForm(!showAddPromForm)}
@@ -2061,7 +2206,24 @@ export default function PromotoraConsole({
           {/* Form para cadastrar */}
           {showAddPromForm && (
             <form onSubmit={handleAddPromotoraSubmit} className="bg-[#161618] border border-white/10 rounded-2xl p-5 space-y-4 shadow-lg max-w-2xl">
-              <h4 className="font-bold text-xs text-white/40 uppercase tracking-wider">Novo Cadastro de Promotora de Vendas</h4>
+              <div className="flex justify-between items-center border-b border-white/10 pb-2">
+                <h4 className="font-bold text-xs text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <UserCheck className="w-4 h-4" />
+                  Novo Cadastro de Promotora de Vendas
+                </h4>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const creds = generateCredentials(newPromNome);
+                    setNewPromUsuario(creds.usuario);
+                    setNewPromSenha(creds.senha);
+                  }}
+                  className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2.5 py-1 rounded-lg font-bold hover:bg-amber-500/20 transition-all flex items-center gap-1 cursor-pointer"
+                >
+                  <Sparkles className="w-3 h-3" /> Gerar Login & Senha
+                </button>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-bold text-white/40 uppercase tracking-wider mb-1">Nome Completo *</label>
@@ -2069,7 +2231,14 @@ export default function PromotoraConsole({
                     type="text"
                     required
                     value={newPromNome}
-                    onChange={(e) => setNewPromNome(e.target.value)}
+                    onChange={(e) => {
+                      setNewPromNome(e.target.value);
+                      if (!newPromUsuario && e.target.value) {
+                        const creds = generateCredentials(e.target.value);
+                        setNewPromUsuario(creds.usuario);
+                        setNewPromSenha(creds.senha);
+                      }
+                    }}
                     placeholder="Ex: Amanda Ferreira Silva"
                     className="w-full text-xs px-3.5 py-2.5 rounded-lg bg-[#1F1F22] border border-white/10 text-white placeholder-white/30 focus:border-amber-500 focus:outline-none"
                   />
@@ -2089,7 +2258,7 @@ export default function PromotoraConsole({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[10px] font-bold text-white/40 uppercase tracking-wider mb-1">Telefone / WhatsApp</label>
+                  <label className="block text-[10px] font-bold text-white/40 uppercase tracking-wider mb-1">Telefone / WhatsApp *</label>
                   <input
                     type="text"
                     value={newPromTel}
@@ -2111,6 +2280,37 @@ export default function PromotoraConsole({
                 </div>
               </div>
 
+              {/* Login e Senha para a Promotora */}
+              <div className="bg-[#1F1F22] p-3.5 rounded-xl border border-amber-500/20 space-y-3">
+                <span className="block text-[10px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1">
+                  <Key className="w-3.5 h-3.5" /> Credenciais de Login para Acesso ao Sistema
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-bold text-white/40 uppercase tracking-wider mb-1">Usuário / Login *</label>
+                    <input
+                      type="text"
+                      required
+                      value={newPromUsuario}
+                      onChange={(e) => setNewPromUsuario(e.target.value)}
+                      placeholder="Ex: amanda.silva"
+                      className="w-full text-xs px-3.5 py-2.5 rounded-lg bg-[#161618] border border-white/10 text-white font-mono placeholder-white/30 focus:border-amber-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-white/40 uppercase tracking-wider mb-1">Senha de Acesso *</label>
+                    <input
+                      type="text"
+                      required
+                      value={newPromSenha}
+                      onChange={(e) => setNewPromSenha(e.target.value)}
+                      placeholder="Ex: safira123"
+                      className="w-full text-xs px-3.5 py-2.5 rounded-lg bg-[#161618] border border-white/10 text-white font-mono placeholder-white/30 focus:border-amber-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div className="flex gap-3 pt-2">
                 <button
                   type="submit"
@@ -2129,33 +2329,74 @@ export default function PromotoraConsole({
             </form>
           )}
 
-          {/* List of registered promotoras */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* List of registered promotoras with Edit, Credentials and Delete actions */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {promotoras.map((p) => (
-              <div key={p.id} className="bg-[#161618] border border-white/10 rounded-2xl p-4 flex justify-between items-center hover:border-amber-500/50 transition-all shadow-md">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-[#1F1F22] flex items-center justify-center font-bold text-white/80 overflow-hidden shrink-0 border border-white/10">
-                    {p.avatar ? (
-                      <img src={p.avatar} alt={p.nome} className="w-full h-full object-cover" />
-                    ) : (
-                      p.nome.charAt(0)
-                    )}
-                  </div>
-                  <div className="text-xs">
-                    <h4 className="font-bold text-white">{p.nome}</h4>
-                    <p className="text-white/40">Código Bling: <span className="font-bold text-amber-400 font-mono">{p.codigoBling}</span></p>
-                    <p className="text-white/60">{p.email} • {p.telefone}</p>
+              <div key={p.id} className="bg-[#161618] border border-white/10 rounded-2xl p-4.5 space-y-3.5 hover:border-amber-500/50 transition-all shadow-md">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-full bg-[#1F1F22] flex items-center justify-center font-bold text-white/80 overflow-hidden shrink-0 border border-amber-500/30">
+                      {p.avatar ? (
+                        <img src={p.avatar} alt={p.nome} className="w-full h-full object-cover" />
+                      ) : (
+                        p.nome.charAt(0)
+                      )}
+                    </div>
+                    <div className="text-xs space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-bold text-white text-sm">{p.nome}</h4>
+                        <span className={`text-[9px] px-2 py-0.2 rounded font-bold uppercase ${
+                          p.status === 'Inativa' 
+                            ? 'bg-red-500/10 text-red-400 border border-red-500/20' 
+                            : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                        }`}>
+                          {p.status || 'Ativa'}
+                        </span>
+                      </div>
+                      <p className="text-white/40">
+                        Código Bling: <span className="font-bold text-amber-400 font-mono">{p.codigoBling}</span> • Função: <span className="text-white/80 font-medium">{p.role}</span>
+                      </p>
+                      <p className="text-white/60">{p.email} • {p.telefone}</p>
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => onDeletePromotora(p.id)}
-                    className="p-1.5 hover:bg-red-500/10 text-red-400 rounded-lg transition-all cursor-pointer"
-                    title="Excluir promotora"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                {/* Login & Senha Box */}
+                <div className="bg-[#1F1F22] p-3 rounded-xl border border-white/5 flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-3 font-mono text-[11px]">
+                    <div>
+                      <span className="text-[9px] text-white/40 block font-bold font-sans uppercase">Usuário / Login</span>
+                      <span className="text-amber-400 font-bold">{p.usuario || p.email.split('@')[0]}</span>
+                    </div>
+                    <div className="border-l border-white/10 pl-3">
+                      <span className="text-[9px] text-white/40 block font-bold font-sans uppercase">Senha</span>
+                      <span className="text-white font-bold">{p.senha || 'safira123'}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 ml-auto">
+                    <button
+                      onClick={() => setCredentialsModalPromotora(p)}
+                      className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 px-2.5 py-1.5 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer"
+                      title="Enviar ou copiar login e senha"
+                    >
+                      <Key className="w-3.5 h-3.5" /> Credenciais
+                    </button>
+                    <button
+                      onClick={() => handleStartEditPromotora(p)}
+                      className="bg-white/5 hover:bg-amber-500 hover:text-gray-950 text-white border border-white/10 px-2.5 py-1.5 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer"
+                      title="Editar cadastro da promotora"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" /> Editar
+                    </button>
+                    <button
+                      onClick={() => onDeletePromotora(p.id)}
+                      className="p-1.5 hover:bg-red-500/10 text-red-400 rounded-lg transition-all cursor-pointer border border-transparent hover:border-red-500/20"
+                      title="Excluir promotora"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -3226,6 +3467,322 @@ export default function PromotoraConsole({
               </button>
             </div>
           </motion.div>
+        </div>
+      )}
+
+      {/* MODAL DE EDIÇÃO DE PROMOTORA */}
+      {editingPromotora && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-[#161618] border border-amber-500/30 rounded-2xl max-w-xl w-full p-6 space-y-5 shadow-2xl relative">
+            <div className="flex justify-between items-center border-b border-white/10 pb-3">
+              <div>
+                <h3 className="font-display font-bold text-base text-white flex items-center gap-2">
+                  <Edit2 className="w-4 h-4 text-amber-500" />
+                  Editar Cadastro da Promotora
+                </h3>
+                <p className="text-xs text-white/50">Atualize os dados e credenciais de acesso da promotora.</p>
+              </div>
+              <button
+                onClick={() => setEditingPromotora(null)}
+                className="text-white/40 hover:text-white p-1 rounded-lg text-lg font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditPromotoraSubmit} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-white/40 uppercase tracking-wider mb-1">Nome Completo *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editPromNome}
+                    onChange={(e) => setEditPromNome(e.target.value)}
+                    className="w-full text-xs px-3.5 py-2.5 rounded-lg bg-[#1F1F22] border border-white/10 text-white focus:border-amber-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-white/40 uppercase tracking-wider mb-1">Código Bling/Vendedor *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editPromBling}
+                    onChange={(e) => setEditPromBling(e.target.value)}
+                    className="w-full text-xs px-3.5 py-2.5 rounded-lg bg-[#1F1F22] border border-white/10 text-white focus:border-amber-500 focus:outline-none font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-white/40 uppercase tracking-wider mb-1">Telefone / WhatsApp *</label>
+                  <input
+                    type="text"
+                    value={editPromTel}
+                    onChange={(e) => setEditPromTel(e.target.value)}
+                    className="w-full text-xs px-3.5 py-2.5 rounded-lg bg-[#1F1F22] border border-white/10 text-white focus:border-amber-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-white/40 uppercase tracking-wider mb-1">E-mail Corporativo *</label>
+                  <input
+                    type="email"
+                    required
+                    value={editPromEmail}
+                    onChange={(e) => setEditPromEmail(e.target.value)}
+                    className="w-full text-xs px-3.5 py-2.5 rounded-lg bg-[#1F1F22] border border-white/10 text-white focus:border-amber-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-white/40 uppercase tracking-wider mb-1">Função / Cargo</label>
+                  <select
+                    value={editPromRole}
+                    onChange={(e) => setEditPromRole(e.target.value as any)}
+                    className="w-full text-xs px-3.5 py-2.5 rounded-lg bg-[#1F1F22] border border-white/10 text-white focus:border-amber-500 focus:outline-none cursor-pointer"
+                  >
+                    <option value="Promotora" className="bg-[#161618]">Promotora de Vendas</option>
+                    <option value="Admin" className="bg-[#161618]">Supervisão / Administradora</option>
+                    <option value="Representante" className="bg-[#161618]">Representante Comercial</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-white/40 uppercase tracking-wider mb-1">Status da Conta</label>
+                  <select
+                    value={editPromStatus}
+                    onChange={(e) => setEditPromStatus(e.target.value as any)}
+                    className="w-full text-xs px-3.5 py-2.5 rounded-lg bg-[#1F1F22] border border-white/10 text-white focus:border-amber-500 focus:outline-none cursor-pointer"
+                  >
+                    <option value="Ativa" className="bg-[#161618]">🟢 Ativa (Pode Bater Ponto)</option>
+                    <option value="Inativa" className="bg-[#161618]">🔴 Inativa (Acesso Bloqueado)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Login e Senha */}
+              <div className="bg-[#1F1F22] p-4 rounded-xl border border-amber-500/20 space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="block text-[10px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1">
+                    <Key className="w-3.5 h-3.5" /> Credenciais de Login e Senha
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const creds = generateCredentials(editPromNome);
+                      setEditPromUsuario(creds.usuario);
+                      setEditPromSenha(creds.senha);
+                    }}
+                    className="text-[10px] text-amber-400 hover:underline font-bold flex items-center gap-1 cursor-pointer"
+                  >
+                    <Sparkles className="w-3 h-3" /> Redefinir Automático
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-bold text-white/40 uppercase tracking-wider mb-1">Usuário / Login *</label>
+                    <input
+                      type="text"
+                      required
+                      value={editPromUsuario}
+                      onChange={(e) => setEditPromUsuario(e.target.value)}
+                      className="w-full text-xs px-3.5 py-2.5 rounded-lg bg-[#161618] border border-white/10 text-white font-mono focus:border-amber-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-white/40 uppercase tracking-wider mb-1">Senha de Acesso *</label>
+                    <input
+                      type="text"
+                      required
+                      value={editPromSenha}
+                      onChange={(e) => setEditPromSenha(e.target.value)}
+                      className="w-full text-xs px-3.5 py-2.5 rounded-lg bg-[#161618] border border-white/10 text-white font-mono focus:border-amber-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-white/40 uppercase tracking-wider mb-1">URL da Foto de Perfil (Avatar)</label>
+                <input
+                  type="text"
+                  value={editPromAvatar}
+                  onChange={(e) => setEditPromAvatar(e.target.value)}
+                  placeholder="https://..."
+                  className="w-full text-xs px-3.5 py-2.5 rounded-lg bg-[#1F1F22] border border-white/10 text-white focus:border-amber-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-3 border-t border-white/10">
+                <button
+                  type="submit"
+                  className="bg-amber-500 hover:bg-amber-600 text-gray-950 font-bold px-6 py-2.5 rounded-xl text-xs cursor-pointer shadow-md shadow-amber-500/10 flex-1"
+                >
+                  Salvar Alterações
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingPromotora(null)}
+                  className="bg-[#1F1F22] hover:bg-white/5 text-white border border-white/10 px-5 py-2.5 rounded-xl text-xs cursor-pointer font-bold"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL ENVIAR CREDENCIAIS DE ACESSO */}
+      {credentialsModalPromotora && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#161618] border border-amber-500/30 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl relative">
+            <div className="flex justify-between items-center border-b border-white/10 pb-3">
+              <div>
+                <h3 className="font-display font-bold text-base text-white flex items-center gap-2">
+                  <Key className="w-4 h-4 text-amber-500" />
+                  Credenciais de Acesso da Promotora
+                </h3>
+                <p className="text-xs text-white/50">{credentialsModalPromotora.nome}</p>
+              </div>
+              <button
+                onClick={() => setCredentialsModalPromotora(null)}
+                className="text-white/40 hover:text-white p-1 rounded-lg text-lg font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="bg-[#1F1F22] p-4 rounded-xl border border-amber-500/20 space-y-3">
+              <div className="space-y-1">
+                <span className="text-[9px] font-bold text-white/40 uppercase tracking-wider block">Nome do Usuário</span>
+                <span className="text-xs font-bold text-white">{credentialsModalPromotora.nome}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-white/5 font-mono text-xs">
+                <div>
+                  <span className="text-[9px] font-bold text-white/40 uppercase tracking-wider block font-sans">Usuário / Login</span>
+                  <span className="text-amber-400 font-bold block">{credentialsModalPromotora.usuario || credentialsModalPromotora.email.split('@')[0]}</span>
+                </div>
+                <div>
+                  <span className="text-[9px] font-bold text-white/40 uppercase tracking-wider block font-sans">Senha de Acesso</span>
+                  <span className="text-white font-bold block">{credentialsModalPromotora.senha || 'safira123'}</span>
+                </div>
+              </div>
+              <div className="pt-2 border-t border-white/5 text-[11px] text-white/60 space-y-0.5">
+                <p>E-mail: <strong className="text-white">{credentialsModalPromotora.email}</strong></p>
+                <p>Telefone: <strong className="text-white">{credentialsModalPromotora.telefone}</strong></p>
+                <p>Cód. Bling: <strong className="text-amber-400 font-mono">{credentialsModalPromotora.codigoBling}</strong></p>
+              </div>
+            </div>
+
+            {copiedToast && (
+              <div className="bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 px-3 py-2 rounded-xl text-xs font-bold text-center animate-pulse">
+                ✅ Dados de acesso copiados para a área de transferência!
+              </div>
+            )}
+
+            <div className="space-y-2.5">
+              <button
+                type="button"
+                onClick={() => handleSendCredentialsWhatsApp(credentialsModalPromotora)}
+                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-emerald-600/20"
+              >
+                📲 Enviar Credenciais por WhatsApp Direct
+              </button>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleCopyCredentials(credentialsModalPromotora)}
+                  className="bg-[#1F1F22] hover:bg-white/10 text-white border border-white/10 font-bold py-2.5 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Copy className="w-3.5 h-3.5 text-amber-400" /> Copiar Acesso
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSendCredentialsEmail(credentialsModalPromotora)}
+                  className="bg-[#1F1F22] hover:bg-white/10 text-white border border-white/10 font-bold py-2.5 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Send className="w-3.5 h-3.5 text-amber-400" /> Enviar por E-mail
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE LOGIN DA PROMOTORA */}
+      {showLoginModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#161618] border border-amber-500/30 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl relative">
+            <div className="flex justify-between items-center border-b border-white/10 pb-3">
+              <div>
+                <h3 className="font-display font-bold text-base text-white flex items-center gap-2">
+                  <LogIn className="w-4 h-4 text-amber-500" />
+                  Entrar no Portal com Usuário & Senha
+                </h3>
+                <p className="text-xs text-white/50">Digite o seu usuário e senha criados para acessar seu perfil de promotora.</p>
+              </div>
+              <button
+                onClick={() => setShowLoginModal(false)}
+                className="text-white/40 hover:text-white p-1 rounded-lg text-lg font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            {loginErrorMessage && (
+              <div className="bg-red-500/10 border border-red-500/30 text-red-400 p-3 rounded-xl text-xs font-semibold">
+                {loginErrorMessage}
+              </div>
+            )}
+
+            <form onSubmit={handlePromotoraLogin} className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold text-white/40 uppercase tracking-wider mb-1">Usuário, E-mail ou Cód. Bling *</label>
+                <input
+                  type="text"
+                  required
+                  value={loginUsuarioInput}
+                  onChange={(e) => setLoginUsuarioInput(e.target.value)}
+                  placeholder="Ex: jaqueline.vechi ou PROM04"
+                  className="w-full text-xs px-3.5 py-2.5 rounded-xl bg-[#1F1F22] border border-white/10 text-white focus:border-amber-500 focus:outline-none"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-white/40 uppercase tracking-wider mb-1">Senha de Acesso *</label>
+                <input
+                  type="password"
+                  required
+                  value={loginSenhaInput}
+                  onChange={(e) => setLoginSenhaInput(e.target.value)}
+                  placeholder="Sua senha cadastrada"
+                  className="w-full text-xs px-3.5 py-2.5 rounded-xl bg-[#1F1F22] border border-white/10 text-white focus:border-amber-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="bg-[#1F1F22] p-3 rounded-xl border border-white/5 text-[11px] text-white/60 space-y-1">
+                <p className="font-bold text-amber-400">💡 Dica de Acesso:</p>
+                <p>Os logins de teste padrão são:</p>
+                <p>• <strong>jaqueline.vechi</strong> / <strong>safira123</strong></p>
+                <p>• <strong>daniela.alves</strong> / <strong>safira123</strong></p>
+                <p>• <strong>admin.safira</strong> / <strong>safira2026</strong></p>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="submit"
+                  className="w-full bg-amber-500 hover:bg-amber-600 text-gray-950 font-bold py-2.5 rounded-xl text-xs transition-all shadow-md shadow-amber-500/10 cursor-pointer"
+                >
+                  Autenticar e Entrar
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

@@ -4,6 +4,8 @@ export interface Promotora {
   codigoBling: string;
   telefone: string;
   email: string;
+  usuario?: string;
+  senha?: string;
   status: 'Ativa' | 'Inativa';
   avatar?: string;
   role: 'Promotora' | 'Admin' | 'Representante';
@@ -35,7 +37,7 @@ export interface Pedido {
   clienteNome: string;
   data: string;
   valor: number; // Valor Total Faturado
-  status: 'Atendido' | 'Faturado' | 'Pendente' | 'Cancelado';
+  status: 'Atendido' | 'Faturado' | 'Pendente' | 'Cancelado' | 'Em digitação' | 'Em andamento' | 'Em aberto' | 'Concluído' | string;
   itens: PedidoItem[];
   vendedor?: string;
   condicaoPagamento?: string;
@@ -132,6 +134,14 @@ export interface Atestado {
   observacoes?: string;
 }
 
+export interface MetaVendaPromotora {
+  id: string;
+  promotoraId: string;
+  promotoraNome: string;
+  mesAno: string; // 'YYYY-MM' e.g. '2026-07'
+  metaValor: number;
+}
+
 export interface BlingSyncLog {
   id: string;
   dataHora: string; // ISO String
@@ -149,6 +159,8 @@ export interface BlingSyncLog {
 
 export interface BlingConfig {
   apiKey: string;
+  accessToken?: string;
+  refreshToken?: string;
   clientId: string;
   clientSecret: string;
   statusConexao: 'Conectado' | 'Desconectado' | 'Erro';

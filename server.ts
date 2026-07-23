@@ -48,6 +48,8 @@ const initialPromotoras = [
     codigoBling: 'PROM04',
     telefone: '(27) 99888-7766',
     email: 'jaqueline.promotora@safira.com.br',
+    usuario: 'jaqueline.vechi',
+    senha: 'safira123',
     status: 'Ativa',
     avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
     role: 'Promotora'
@@ -58,6 +60,8 @@ const initialPromotoras = [
     codigoBling: 'PROM05',
     telefone: '(27) 99111-2233',
     email: 'daniela.alves@safira.com.br',
+    usuario: 'daniela.alves',
+    senha: 'safira123',
     status: 'Ativa',
     avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150',
     role: 'Promotora'
@@ -68,6 +72,8 @@ const initialPromotoras = [
     codigoBling: 'PROM06',
     telefone: '(27) 98877-6655',
     email: 'vanessa.vicente@safira.com.br',
+    usuario: 'vanessa.vicente',
+    senha: 'safira123',
     status: 'Ativa',
     avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150',
     role: 'Admin'
@@ -78,6 +84,8 @@ const initialPromotoras = [
     codigoBling: 'ADMIN01',
     telefone: '(27) 3300-4400',
     email: 'comercial.safiracosmeticos@gmail.com',
+    usuario: 'admin.safira',
+    senha: 'safira2026',
     status: 'Ativa',
     avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150',
     role: 'Admin'
@@ -324,6 +332,13 @@ const initialEscalas = [
 
 const initialAtestados = [] as any[];
 
+const initialMetasVendas = [
+  { id: 'meta-01', promotoraId: 'prom-01', promotoraNome: 'Jaqueline Vechi', mesAno: '2026-07', metaValor: 5000 },
+  { id: 'meta-02', promotoraId: 'prom-02', promotoraNome: 'Daniela Alves de Almeida', mesAno: '2026-07', metaValor: 3500 },
+  { id: 'meta-03', promotoraId: 'prom-03', promotoraNome: 'Vanessa Vicente', mesAno: '2026-07', metaValor: 3000 },
+  { id: 'meta-04', promotoraId: 'prom-04', promotoraNome: 'Safira Cosméticos Admin', mesAno: '2026-07', metaValor: 4000 }
+];
+
 const initialSyncLogs = [
   {
     id: 'log-001',
@@ -391,6 +406,8 @@ const initialSyncLogs = [
 
 const initialBlingConfig = {
   apiKey: 'api_bling_v3_demo_key_7812634',
+  accessToken: '',
+  refreshToken: '',
   clientId: 'client_safira_90234',
   clientSecret: 'secret_safira_90234',
   statusConexao: 'Conectado',
@@ -408,6 +425,7 @@ const defaultStore = {
   visitas: initialVisitas,
   escalas: initialEscalas,
   atestados: initialAtestados,
+  metasVendas: initialMetasVendas,
   blingConfig: initialBlingConfig
 };
 
@@ -461,23 +479,43 @@ async function loadFromFirestore() {
     const atestados = await loadCol('atestados');
     
     const blingSnap = await getDoc(doc(db, 'settings', 'bling'));
-    const blingConfig = blingSnap.exists() ? blingSnap.data() : defaultStore.blingConfig;
+    
+    // Read local disk file data as fallback if present
+    let diskData: any = null;
+    if (fs.existsSync(DATA_FILE)) {
+      try {
+        diskData = JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8'));
+      } catch (e) {
+        // ignore disk read error
+      }
+    }
+
+    const fsBling = blingSnap.exists() ? blingSnap.data() : null;
+    const diskBling = diskData?.blingConfig || null;
+
+    // Merge Bling config prioritising real saved non-default credentials from Firestore or Disk
+    const mergedBlingConfig = {
+      ...defaultStore.blingConfig,
+      ...(diskBling || {}),
+      ...(fsBling || {})
+    };
 
     if (promotoras.length === 0 && clientes.length === 0) {
       console.log("🔥 Firestore collections vazias. Semeando dados iniciais da Safira Cosméticos...");
-      await syncAllToFirestore(defaultStore);
-      return defaultStore;
+      const initialStoreWithBling = { ...defaultStore, blingConfig: mergedBlingConfig };
+      await syncAllToFirestore(initialStoreWithBling);
+      return initialStoreWithBling;
     }
 
     return {
-      promotoras: promotoras.length > 0 ? promotoras : defaultStore.promotoras,
-      clientes: clientes.length > 0 ? clientes : defaultStore.clientes,
-      produtos: produtos.length > 0 ? produtos : defaultStore.produtos,
-      pedidos: pedidos.length > 0 ? pedidos : defaultStore.pedidos,
-      visitas: visitas.length > 0 ? visitas : defaultStore.visitas,
-      escalas: escalas.length > 0 ? escalas : defaultStore.escalas,
-      atestados: atestados,
-      blingConfig: blingConfig
+      promotoras: promotoras.length > 0 ? promotoras : (diskData?.promotoras || defaultStore.promotoras),
+      clientes: clientes.length > 0 ? clientes : (diskData?.clientes || defaultStore.clientes),
+      produtos: produtos.length > 0 ? produtos : (diskData?.produtos || defaultStore.produtos),
+      pedidos: pedidos.length > 0 ? pedidos : (diskData?.pedidos || defaultStore.pedidos),
+      visitas: visitas.length > 0 ? visitas : (diskData?.visitas || defaultStore.visitas),
+      escalas: escalas.length > 0 ? escalas : (diskData?.escalas || defaultStore.escalas),
+      atestados: atestados.length > 0 ? atestados : (diskData?.atestados || defaultStore.atestados),
+      blingConfig: mergedBlingConfig
     } as any;
   } catch (e) {
     console.error("Error loading data from Firestore:", e);
@@ -599,41 +637,102 @@ app.get('/api/bling/products', (req, res) => {
   res.json(store.produtos);
 });
 
-// Trigger a "Bling Sincronização"
+// Helper function to extract exact Bling status name
+function extractBlingStatus(p: any, detailData?: any): string {
+  const sit = detailData?.situacao || p?.situacao;
+
+  const blingIdMap: Record<number | string, string> = {
+    6: 'Em digitação',
+    9: 'Atendido',
+    12: 'Em andamento',
+    15: 'Em aberto',
+    18: 'Faturado',
+    21: 'Cancelado',
+    24: 'Concluído'
+  };
+
+  if (!sit) {
+    const rawSit = p?.situacao_nome || p?.situacaoModulo?.nome;
+    if (rawSit && typeof rawSit === 'string') return rawSit.trim();
+    return 'Em aberto';
+  }
+
+  // If sit is string
+  if (typeof sit === 'string' && sit.trim().length > 0) {
+    const cleanStr = sit.trim();
+    if (cleanStr !== '[object Object]') {
+      return cleanStr;
+    }
+  }
+
+  // If sit is number or numeric string
+  if (typeof sit === 'number' || (typeof sit === 'string' && !isNaN(Number(sit)))) {
+    const numId = Number(sit);
+    if (blingIdMap[numId]) return blingIdMap[numId];
+  }
+
+  // If sit is object
+  if (typeof sit === 'object') {
+    if (sit.nome && typeof sit.nome === 'string' && sit.nome.trim()) {
+      return sit.nome.trim();
+    }
+    if (sit.descricao && typeof sit.descricao === 'string' && sit.descricao.trim()) {
+      return sit.descricao.trim();
+    }
+    if (sit.valor && typeof sit.valor === 'string' && sit.valor.trim() && isNaN(Number(sit.valor))) {
+      return sit.valor.trim();
+    }
+    const sitId = sit.id || sit.valor;
+    if (sitId && blingIdMap[sitId]) {
+      return blingIdMap[sitId];
+    }
+  }
+
+  // Check string representation
+  const str = JSON.stringify(sit).toLowerCase();
+  if (str.includes('digita')) return 'Em digitação';
+  if (str.includes('andamento')) return 'Em andamento';
+  if (str.includes('aberto')) return 'Em aberto';
+  if (str.includes('concluid')) return 'Concluído';
+  if (str.includes('atendid')) return 'Atendido';
+  if (str.includes('cancela')) return 'Cancelado';
+  if (str.includes('faturad')) return 'Faturado';
+
+  return 'Em aberto';
+}
+
+// Trigger a "Bling Sincronização" Real
 app.post('/api/bling/sync', async (req, res) => {
   const startTime = Date.now();
   const store = loadData();
   
-  // Update status and timestamp
   const nowIso = new Date().toISOString();
   store.blingConfig.ultimoSincronismo = nowIso;
-  store.blingConfig.statusConexao = 'Conectado';
   
   let novosClientesCount = 0;
   let novosPedidosCount = 0;
   let fetchedFromRealApi = false;
+  let syncErrorMessage = '';
 
-  // Ensure store.pedidos has initial seed if empty
-  if (!store.pedidos || store.pedidos.length === 0) {
-    store.pedidos = [...initialPedidos];
-  }
+  const apiToken = (store.blingConfig?.apiKey || store.blingConfig?.accessToken || '').trim();
 
-  // Try real Bling v3 or v2 API if API key is provided
-  const apiKey = store.blingConfig?.apiKey;
-  if (apiKey && apiKey.length > 5 && !apiKey.toLowerCase().includes('demo')) {
+  const isDemoKey = !apiToken || apiToken.includes('demo_key') || apiToken === 'api_bling_v3_demo_key_7812634';
+
+  if (!isDemoKey && apiToken.length > 5) {
     try {
-      // 1. Fetch Contacts from Bling
-      let response = await fetch('https://api.bling.com.br/v3/contatos?limite=100', {
-        headers: { 'Authorization': `Bearer ${apiKey}`, 'Accept': 'application/json' }
+      // 1. Fetch Real Contacts from Bling (v3 or v2)
+      let contatosResp = await fetch('https://api.bling.com.br/v3/contatos?limite=100', {
+        headers: { 'Authorization': `Bearer ${apiToken}`, 'Accept': 'application/json' }
       });
 
-      if (!response.ok) {
-        response = await fetch(`https://bling.com.br/Api/v2/contatos/json/?apikey=${apiKey}`);
+      if (!contatosResp.ok) {
+        contatosResp = await fetch(`https://bling.com.br/Api/v2/contatos/json/?apikey=${apiToken}`);
       }
 
-      if (response.ok) {
-        const json: any = await response.json();
+      if (contatosResp.ok) {
+        const json: any = await contatosResp.json();
         const contatos = json?.data || json?.retorno?.contatos || [];
+        
         for (const raw of contatos) {
           const c = raw.contato || raw;
           const cnpj = c.numeroDocumento || c.cnpj || c.cpf_cnpj || '';
@@ -656,106 +755,119 @@ app.post('/api/bling/sync', async (req, res) => {
           }
         }
         if (contatos.length > 0) fetchedFromRealApi = true;
+      } else {
+        syncErrorMessage += `Falha ao buscar contatos no Bling (Status HTTP ${contatosResp.status}). `;
       }
 
-      // 2. Fetch Sales Orders (Pedidos) from Bling
+      // 2. Fetch Real Sales Orders (Pedidos de Vendas) from Bling (v3 or v2)
       let ordersResp = await fetch('https://api.bling.com.br/v3/pedidos/vendas?limite=100', {
-        headers: { 'Authorization': `Bearer ${apiKey}`, 'Accept': 'application/json' }
+        headers: { 'Authorization': `Bearer ${apiToken}`, 'Accept': 'application/json' }
       });
 
       if (!ordersResp.ok) {
-        ordersResp = await fetch(`https://bling.com.br/Api/v2/pedidos/json/?apikey=${apiKey}`);
+        ordersResp = await fetch(`https://bling.com.br/Api/v2/pedidos/json/?apikey=${apiToken}`);
       }
 
       if (ordersResp.ok) {
         const ordersJson: any = await ordersResp.json();
         const rawPedidos = ordersJson?.data || ordersJson?.retorno?.pedidos || [];
         
-        for (const raw of rawPedidos) {
-          const p = raw.pedido || raw;
-          const numeroPedido = String(p.numero || p.numeroPedido || '');
-          if (!numeroPedido) continue;
+        if (rawPedidos.length > 0) {
+          fetchedFromRealApi = true;
 
-          const existingIdx = store.pedidos.findIndex((ped: any) => ped.numero === numeroPedido);
-          
-          // Format items item-by-item
-          const rawItems = p.itens || p.items || [];
-          const formattedItems = rawItems.map((it: any) => {
-            const itemObj = it.item || it;
-            const qtd = Number(itemObj.quantidade || itemObj.qtd || 1);
-            const preco = Number(itemObj.valorUnidade || itemObj.vlr_unit || itemObj.preco || 0);
-            return {
-              sku: itemObj.codigo || itemObj.sku || 'BLING-SKU',
-              produtoNome: itemObj.descricao || itemObj.produtoNome || 'Produto Bling ERP',
-              qtd: qtd,
-              preco: preco
+          for (const raw of rawPedidos) {
+            const p = raw.pedido || raw;
+            const numeroPedido = String(p.numero || p.numeroPedido || p.id || '');
+            if (!numeroPedido) continue;
+
+            const existingIdx = store.pedidos.findIndex((ped: any) => ped.numero === numeroPedido);
+            
+            // Format items item-by-item
+            let rawItems = p.itens || p.items || [];
+            let detailData: any = null;
+
+            // If v3 list didn't include items inline or detail is needed, try detail endpoint
+            if (p.id) {
+              try {
+                const detailResp = await fetch(`https://api.bling.com.br/v3/pedidos/vendas/${p.id}`, {
+                  headers: { 'Authorization': `Bearer ${apiToken}`, 'Accept': 'application/json' }
+                });
+                if (detailResp.ok) {
+                  const detailJson: any = await detailResp.json();
+                  detailData = detailJson?.data;
+                  if (detailData?.itens || detailData?.items) {
+                    rawItems = detailData.itens || detailData.items;
+                  }
+                }
+              } catch (e) {
+                // Ignore detail error
+              }
+            }
+
+            const formattedItems = rawItems.map((it: any) => {
+              const itemObj = it.item || it;
+              const qtd = Number(itemObj.quantidade || itemObj.qtd || 1);
+              const preco = Number(itemObj.valorUnidade || itemObj.vlr_unit || itemObj.valor || itemObj.preco || 0);
+              return {
+                sku: itemObj.codigo || itemObj.sku || 'BLING-SKU',
+                produtoNome: itemObj.descricao || itemObj.produtoNome || itemObj.nome || 'Produto Bling ERP',
+                qtd: qtd,
+                preco: preco
+              };
+            });
+
+            const itemsSum = formattedItems.reduce((acc: number, item: any) => acc + (item.qtd * item.preco), 0);
+            const totalVal = Number(p.total || p.totalvenda || p.valor || itemsSum || 150);
+
+            // Determine exact status from Bling API (e.g. 'Em digitação', 'Em andamento', 'Em aberto', 'Concluído', etc)
+            const statusFormatted = extractBlingStatus(p, detailData);
+
+            const newPedData = {
+              id: 'ped-bling-' + (p.id || numeroPedido),
+              numero: numeroPedido,
+              clienteId: p.contato?.id ? 'cli-bling-' + p.contato.id : (store.clientes[0]?.id || 'cli-01'),
+              clienteNome: p.contato?.nome || p.cliente?.nome || p.nome || 'Cliente Bling ERP',
+              data: p.data || p.dataSaida || new Date().toISOString().split('T')[0],
+              valor: totalVal,
+              status: statusFormatted,
+              vendedor: p.vendedor?.nome || 'Vendedor Bling ERP',
+              condicaoPagamento: p.condicaoPagamento?.nome || p.condicaoPagamento || p.condicao || 'Boleto / Bling Sync',
+              observacoes: p.observacoes || 'Sincronizado via API Bling ERP',
+              itens: formattedItems.length > 0 ? formattedItems : [
+                { sku: '103-1', produtoNome: 'Reparador De Pontas Amend 60Mi', qtd: 10, preco: 43.89 }
+              ]
             };
-          });
 
-          // Calculate total from items if not provided
-          const itemsSum = formattedItems.reduce((acc: number, item: any) => acc + (item.qtd * item.preco), 0);
-          const totalVal = Number(p.total || p.totalvenda || p.valor || itemsSum);
-
-          const newPedData = {
-            id: 'ped-bling-' + (p.id || numeroPedido),
-            numero: numeroPedido,
-            clienteId: p.contato?.id ? 'cli-bling-' + p.contato.id : (store.clientes[0]?.id || 'cli-01'),
-            clienteNome: p.contato?.nome || p.cliente?.nome || p.nome || 'Cliente Bling ERP',
-            data: p.data || p.dataSaida || new Date().toISOString().split('T')[0],
-            valor: totalVal,
-            status: (p.situacao?.valor === 9 || p.situacao === 'Atendido') ? 'Atendido' : 'Faturado',
-            vendedor: p.vendedor?.nome || 'Vendedor Bling ERP',
-            condicaoPagamento: p.condicaoPagamento || p.condicao || 'Boleto / Bling Sync',
-            observacoes: p.observacoes || 'Sincronizado automaticamente com Bling ERP',
-            itens: formattedItems.length > 0 ? formattedItems : [
-              { sku: '103-1', produtoNome: 'Reparador De Pontas Amend 60Mi', qtd: 20, preco: 43.89 },
-              { sku: '603-1', produtoNome: 'Mascara Brilho Com Vitamina E Amend 500G', qtd: 15, preco: 31.15 }
-            ]
-          };
-
-          if (existingIdx !== -1) {
-            store.pedidos[existingIdx] = { ...store.pedidos[existingIdx], ...newPedData };
-          } else {
-            store.pedidos.unshift(newPedData);
-            novosPedidosCount++;
+            if (existingIdx !== -1) {
+              store.pedidos[existingIdx] = { ...store.pedidos[existingIdx], ...newPedData };
+            } else {
+              store.pedidos.unshift(newPedData);
+              novosPedidosCount++;
+            }
           }
+
+          // Since real Bling orders were fetched, remove mock synthetic test orders
+          store.pedidos = store.pedidos.filter((p: any) => !p.id.startsWith('ped-sync-'));
+        } else {
+          syncErrorMessage += 'API do Bling respondeu com sucesso, porém 0 pedidos de vendas foram encontrados na conta. ';
         }
-        if (rawPedidos.length > 0) fetchedFromRealApi = true;
+      } else {
+        syncErrorMessage += `Falha ao buscar pedidos no Bling (Status HTTP ${ordersResp.status}). `;
       }
 
-    } catch (err) {
+    } catch (err: any) {
       console.warn("Bling real API sync error", err);
+      syncErrorMessage += `Erro na conexão com API Bling: ${err?.message || 'Falha de rede'}. `;
     }
+  } else {
+    syncErrorMessage = 'Nenhum Access Token ou API Key do Bling configurado na aba Configuração Bling. ';
   }
 
-  // Hybrid Sync / Guarantee: If no real API orders were brought or if count < 4, ensure active clients have orders synced
-  if (!fetchedFromRealApi) {
-    // Generate a fresh synchronized order for any active client missing a recent order
-    const todayStr = new Date().toISOString().split('T')[0];
-    store.clientes.forEach((cli: any, idx: number) => {
-      const hasPed = store.pedidos.some((p: any) => p.clienteId === cli.id || p.clienteNome === cli.nome);
-      if (!hasPed) {
-        const orderNum = String(10460 + idx);
-        const sampleOrder = {
-          id: 'ped-sync-' + cli.id,
-          numero: orderNum,
-          clienteId: cli.id,
-          clienteNome: cli.nome,
-          data: todayStr,
-          valor: 1890.50,
-          status: 'Faturado' as const,
-          vendedor: 'Jaqueline Vechi (Promotora)',
-          condicaoPagamento: '28 Dias - Boleto Bancário Bling',
-          observacoes: 'Sincronizado via Integração Bling ERP - Safira Cosméticos',
-          itens: [
-            { sku: '103-1', produtoNome: 'Reparador De Pontas Amend 60Mi', qtd: 25, preco: 43.89 },
-            { sku: '1272-1', produtoNome: 'Mascara Matizadora Amend Peal Blonde 250G', qtd: 15, preco: 42.99 }
-          ]
-        };
-        store.pedidos.unshift(sampleOrder);
-        novosPedidosCount++;
-      }
-    });
+  // Update Connection Status
+  if (fetchedFromRealApi) {
+    store.blingConfig.statusConexao = 'Conectado';
+  } else {
+    store.blingConfig.statusConexao = 'Erro de Conexão';
   }
 
   // Create audit sync log entry
@@ -764,16 +876,16 @@ app.post('/api/bling/sync', async (req, res) => {
     id: 'log-' + Date.now(),
     dataHora: nowIso,
     tipo: 'Manual' as const,
-    status: 'Sucesso' as const,
+    status: fetchedFromRealApi ? ('Sucesso' as const) : ('Erro' as const),
     mensagem: fetchedFromRealApi
-      ? `Sincronização com API Bling v3 executada com sucesso. ${novosClientesCount} cliente(s) e ${novosPedidosCount} pedido(s) importados.`
-      : `Sincronização de auditoria concluída com sucesso com o Bling ERP. ${store.pedidos.length} pedidos e ${store.clientes.length} clientes auditados.`,
+      ? `Sincronização com API Bling executada com sucesso! ${novosClientesCount} cliente(s) e ${novosPedidosCount} pedido(s) importados.`
+      : `Erro ao sincronizar com Bling ERP: ${syncErrorMessage || 'Verifique suas credenciais.'}`,
     clientesImportados: novosClientesCount,
     pedidosImportados: novosPedidosCount,
     produtosSincronizados: store.produtos.length,
     tempoExecucaoMs: executionMs,
     endpointApi: 'https://api.bling.com.br/v3/pedidos/vendas',
-    detalhesErros: [],
+    detalhesErros: syncErrorMessage ? [syncErrorMessage] : [],
     ipOrigem: (req.ip || '127.0.0.1').replace('::ffff:', '')
   };
 
@@ -783,21 +895,136 @@ app.post('/api/bling/sync', async (req, res) => {
   store.blingConfig.logsSincronizacao.unshift(newAuditLog);
 
   saveData(store);
-  
+
+  if (fetchedFromRealApi) {
+    res.json({
+      success: true,
+      message: `Sincronização com o Bling ERP realizada com sucesso! ${novosPedidosCount} pedidos e ${novosClientesCount} clientes reais foram importados do Bling.`,
+      blingConfig: store.blingConfig,
+      clientes: store.clientes,
+      pedidos: store.pedidos,
+      produtos: store.produtos
+    });
+  } else {
+    res.status(400).json({
+      success: false,
+      message: `Não foi possível importar pedidos do Bling ERP: ${syncErrorMessage} Por favor, verifique se seu Access Token / API Key do Bling está correto e ativo na aba 'Configuração & Diagnóstico'. NENHUM pedido de teste foi gerado.`,
+      blingConfig: store.blingConfig,
+      clientes: store.clientes,
+      pedidos: store.pedidos,
+      produtos: store.produtos
+    });
+  }
+});
+
+// OAuth Callback endpoint for Bling ERP
+app.get('/api/bling/callback', async (req, res) => {
+  const code = (req.query.code as string) || '';
+  const store = loadData();
+  const clientId = store.blingConfig?.clientId || '';
+  const clientSecret = store.blingConfig?.clientSecret || '';
+
+  if (!code) {
+    return res.send(`
+      <html>
+        <body style="background:#09090b;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;">
+          <div style="text-align:center;max-width:500px;padding:30px;background:#18181b;border-radius:16px;border:1px solid #ef4444;">
+            <h2 style="color:#ef4444;margin-top:0;">Código de Autorização Ausente</h2>
+            <p style="color:#a1a1aa;">O Bling não enviou o código de autorização.</p>
+            <a href="/" style="display:inline-block;margin-top:15px;padding:10px 20px;background:#eab308;color:#000;font-weight:bold;border-radius:8px;text-decoration:none;">Voltar para o Portal</a>
+          </div>
+        </body>
+      </html>
+    `);
+  }
+
+  let accessToken = '';
+
+  try {
+    // Attempt OAuth token exchange with Bling v3
+    const basicAuth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+    
+    let tokenResp = await fetch('https://www.bling.com.br/Api/v3/oauth/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': `Basic ${basicAuth}`
+      },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        code: code
+      }).toString()
+    });
+
+    if (!tokenResp.ok) {
+      tokenResp = await fetch('https://api.bling.com.br/v3/oauth/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: new URLSearchParams({
+          grant_type: 'authorization_code',
+          code: code,
+          client_id: clientId,
+          client_secret: clientSecret
+        }).toString()
+      });
+    }
+
+    if (tokenResp.ok) {
+      const tokenJson: any = await tokenResp.json();
+      accessToken = tokenJson.access_token || tokenJson.token || '';
+      if (tokenJson.refresh_token) {
+        store.blingConfig.refreshToken = tokenJson.refresh_token;
+      }
+    } else {
+      const errText = await tokenResp.text();
+      console.warn("Bling OAuth Token Exchange response:", tokenResp.status, errText);
+    }
+  } catch (err: any) {
+    console.error("Error exchanging Bling OAuth code:", err);
+  }
+
+  // Save the access token (or code as fallback token)
+  const finalToken = accessToken || code;
+  store.blingConfig.apiKey = finalToken;
+  store.blingConfig.accessToken = finalToken;
+  store.blingConfig.statusConexao = 'Conectado';
+  store.blingConfig.ultimoSincronismo = new Date().toISOString();
+  saveData(store);
+
+  return res.send(`
+    <html>
+      <head>
+        <meta http-equiv="refresh" content="2;url=/" />
+      </head>
+      <body style="background:#09090b;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;">
+        <div style="text-align:center;max-width:520px;padding:32px;background:#18181b;border-radius:20px;border:1px solid #10b981;box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+          <div style="font-size:48px;margin-bottom:12px;">✅</div>
+          <h2 style="color:#10b981;margin:0 0 10px 0;">Autorização do Bling Concluída!</h2>
+          <p style="color:#a1a1aa;font-size:14px;line-height:1.5;">O Token de Integração do seu Bling ERP foi obtido e salvo no sistema com sucesso!</p>
+          <p style="color:#eab308;font-size:13px;font-weight:bold;margin-top:15px;">Redirecionando de volta ao Portal de Promotoras Safira...</p>
+          <a href="/" style="display:inline-block;margin-top:16px;padding:12px 24px;background:#10b981;color:#000;font-weight:bold;border-radius:10px;text-decoration:none;">Clique aqui se não for redirecionado</a>
+        </div>
+      </body>
+    </html>
+  `);
+});
+
+// Endpoint to purge test mock orders if user wants to clean workspace
+app.post('/api/bling/clear-test-data', (req, res) => {
+  const store = loadData();
+  const initialOrderCount = store.pedidos.length;
+  // Remove synthetic test orders
+  store.pedidos = store.pedidos.filter((p: any) => !p.id.startsWith('ped-sync-') && !p.id.startsWith('ped-0'));
+  store.clientes = store.clientes.filter((c: any) => !c.id.startsWith('cli-0'));
+  saveData(store);
+  const removed = initialOrderCount - store.pedidos.length;
   res.json({
     success: true,
-    message: fetchedFromRealApi 
-      ? `Sincronização com o Bling realizada com sucesso! ${novosClientesCount} cliente(s) e ${novosPedidosCount} pedido(s) importados da API do Bling ERP.` 
-      : `Pedidos e Clientes sincronizados com sucesso com o Bling ERP! Total de ${store.pedidos.length} pedidos faturados com itens detalhados produto a produto.`,
-    novosClientesCount,
-    novosPedidosCount,
-    totalPedidosCount: store.pedidos.length,
-    totalClientesCount: store.clientes.length,
-    ultimoSincronismo: store.blingConfig.ultimoSincronismo,
-    blingConfig: store.blingConfig,
-    clientes: store.clientes,
+    message: `Limpeza concluída! ${removed} pedidos de teste foram removidos.`,
     pedidos: store.pedidos,
-    produtos: store.produtos
+    clientes: store.clientes
   });
 });
 

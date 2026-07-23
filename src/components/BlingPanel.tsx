@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Settings, RefreshCw, CheckCircle, AlertTriangle, Link2, 
   Database, Wifi, Key, FileText, ShoppingBag, Users, Check,
@@ -16,6 +16,7 @@ interface BlingPanelProps {
   onSaveConfig: (updated: Partial<BlingConfig>) => void;
   onTriggerSync: () => Promise<void>;
   syncing: boolean;
+  onClearTestData?: () => void;
 }
 
 export default function BlingPanel({
@@ -25,15 +26,27 @@ export default function BlingPanel({
   produtos,
   onSaveConfig,
   onTriggerSync,
-  syncing
+  syncing,
+  onClearTestData
 }: BlingPanelProps) {
   const [activeTab, setActiveTab] = useState<'status' | 'clientes' | 'pedidos' | 'produtos' | 'auditoria'>('status');
-  const [apiKey, setApiKey] = useState(config.apiKey);
-  const [clientId, setClientId] = useState(config.clientId);
-  const [clientSecret, setClientSecret] = useState(config.clientSecret);
-  const [aliasServidor, setAliasServidor] = useState(config.aliasServidor);
-  const [webhookAtivo, setWebhookAtivo] = useState(config.webhookAtivo);
+  const [apiKey, setApiKey] = useState(config.apiKey || '');
+  const [clientId, setClientId] = useState(config.clientId || '');
+  const [clientSecret, setClientSecret] = useState(config.clientSecret || '');
+  const [aliasServidor, setAliasServidor] = useState(config.aliasServidor || 'Safira Comercial Principal');
+  const [webhookAtivo, setWebhookAtivo] = useState(!!config.webhookAtivo);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Sync state whenever props from server change
+  useEffect(() => {
+    if (config) {
+      if (config.apiKey) setApiKey(config.apiKey);
+      if (config.clientId) setClientId(config.clientId);
+      if (config.clientSecret) setClientSecret(config.clientSecret);
+      if (config.aliasServidor) setAliasServidor(config.aliasServidor);
+      if (config.webhookAtivo !== undefined) setWebhookAtivo(config.webhookAtivo);
+    }
+  }, [config.apiKey, config.clientId, config.clientSecret, config.aliasServidor, config.webhookAtivo]);
 
   // Audit tab filters & state
   const [auditSearch, setAuditSearch] = useState('');
@@ -120,6 +133,16 @@ export default function BlingPanel({
               {config.statusConexao}
             </span>
           </div>
+
+          {onClearTestData && pedidos.some(p => p.id.startsWith('ped-sync-') || p.id.startsWith('ped-0')) && (
+            <button
+              onClick={onClearTestData}
+              className="flex items-center gap-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer"
+              title="Remover pedidos e clientes fictícios de teste"
+            >
+              Limpar Pedidos de Teste
+            </button>
+          )}
 
           <button
             onClick={onTriggerSync}
@@ -245,20 +268,52 @@ export default function BlingPanel({
                 />
               </div>
 
-              <div>
-                <label className="block text-[11px] font-bold text-white/40 uppercase tracking-wider mb-1">
-                  API Token / Token de Integração (V3)
-                </label>
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3.5 space-y-2">
+                <div className="flex items-start gap-2.5">
+                  <Key className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  <div className="space-y-1 text-xs">
+                    <label className="block text-[11px] font-bold text-amber-300 uppercase tracking-wider">
+                      API Token / Token de Integração do Bling (V3 ou V2)
+                    </label>
+                    <p className="text-[11px] text-white/70">
+                      Cole abaixo o **Token de Acesso / Chave API** gerado na sua conta oficial do Bling ERP:
+                    </p>
+                  </div>
+                </div>
+
                 <input
                   type="text"
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
-                  className="w-full text-xs px-3.5 py-2.5 rounded-xl bg-[#1F1F22] border border-white/10 text-white placeholder-white/40 focus:outline-none focus:border-amber-500 focus:ring-1.5 focus:ring-amber-500/20 font-mono"
-                  placeholder="Insira o Token Gerado no Bling"
+                  className="w-full text-xs px-3.5 py-2.5 rounded-xl bg-[#161618] border border-amber-500/40 text-amber-200 placeholder-white/30 focus:outline-none focus:border-amber-400 focus:ring-1.5 focus:ring-amber-500/30 font-mono"
+                  placeholder="Cole aqui seu Token API do Bling (ex: 8a9f7d6e... ou Bearer Token v3)"
                 />
-                <span className="text-[10px] text-white/40 mt-1 block">
-                  Recomendado obter o token em Preferências &gt; Integrações &gt; Plataformas.
-                </span>
+
+                <div className="bg-[#161618]/90 p-3 rounded-xl border border-amber-500/30 text-[11px] text-white/80 space-y-2">
+                  <p className="font-bold text-amber-400 flex items-center gap-1.5 text-xs">
+                    <span>💡</span> Como gerar o Token a partir da tela do Bling que você está aberta (sua imagem):
+                  </p>
+                  <ol className="list-decimal list-inside space-y-1.5 text-white/80 pl-1">
+                    <li>
+                      <strong>Copie o "Link de convite"</strong> que aparece logo abaixo do Client Secret na sua tela do Bling (<code className="text-amber-300 font-mono text-[10px]">https://www.bling.com.br/Api/v3/oauth/authorize?...</code>).
+                    </li>
+                    <li>
+                      <strong>Cole esse link em uma nova aba</strong> do seu navegador e abra.
+                    </li>
+                    <li>
+                      O Bling abrirá uma tela pedindo autorização para conectar o app. Clique no botão verde <strong>"Autorizar"</strong>.
+                    </li>
+                    <li>
+                      Ao autorizar, o Bling vai gerar e exibir o <strong>Token de Acesso / Chave de API</strong> (ou o código de autorização).
+                    </li>
+                    <li>
+                      <strong>Cole esse Token no campo amarelo acima</strong>, clique em <strong className="text-emerald-400">"Salvar Configuração"</strong> e depois em <strong className="text-amber-400">"Sincronizar Agora"</strong>!
+                    </li>
+                  </ol>
+                  <p className="text-[10px] text-white/50 border-t border-white/10 pt-1.5">
+                    * Alternativamente no Bling: Vá no menu superior <em>Preferências (Engrenagem) &gt; Sistema &gt; Usuários e Serviços / Usuários API</em> e copie a Chave API do seu usuário.
+                  </p>
+                </div>
               </div>
 
               {/* Webhooks config */}
