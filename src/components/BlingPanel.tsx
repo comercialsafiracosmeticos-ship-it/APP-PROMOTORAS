@@ -80,15 +80,21 @@ export default function BlingPanel({
   const [selectedLog, setSelectedLog] = useState<BlingSyncLog | null>(null);
 
   const handleSave = () => {
-    onSaveConfig({
+    const payload = {
       apiKey,
       clientId,
       clientSecret,
       aliasServidor,
       webhookAtivo
-    });
+    };
+    try {
+      localStorage.setItem('safira_bling_config', JSON.stringify(payload));
+    } catch (e) {
+      console.error("Error writing safira_bling_config to localStorage", e);
+    }
+    onSaveConfig(payload);
     setSaveSuccess(true);
-    setTimeout(() => setSaveSuccess(false), 3000);
+    setTimeout(() => setSaveSuccess(false), 5000);
   };
 
   const formattedDate = (isoString?: string) => {
@@ -377,8 +383,8 @@ export default function BlingPanel({
                   Salvar Configuração
                 </button>
                 {saveSuccess && (
-                  <span className="text-xs text-emerald-400 font-semibold flex items-center gap-1">
-                    <Check className="w-4 h-4" /> Configuração salva e atualizada!
+                  <span className="text-xs text-emerald-400 font-bold flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 rounded-xl animate-fade-in">
+                    <Check className="w-4 h-4 text-emerald-400 shrink-0" /> Credenciais salvas permanentemente no Firestore e Navegador!
                   </span>
                 )}
               </div>

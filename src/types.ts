@@ -99,6 +99,7 @@ export interface Visita {
   };
   fotoDisplay?: string; // Base64 or URL
   fotoFachada?: string; // Base64 or URL
+  fotosGondola?: string[]; // Array of Base64 or image URLs for Gondola photos
   comentarios?: string;
   pecasVendidas?: number;
   auditoriaGondola?: AuditoriaItem[];

@@ -405,13 +405,13 @@ const initialSyncLogs = [
 ];
 
 const initialBlingConfig = {
-  apiKey: 'api_bling_v3_demo_key_7812634',
+  apiKey: '',
   accessToken: '',
   refreshToken: '',
-  clientId: 'client_safira_90234',
-  clientSecret: 'secret_safira_90234',
-  statusConexao: 'Conectado',
-  ultimoSincronismo: '2026-07-22T11:45:10.000Z',
+  clientId: '',
+  clientSecret: '',
+  statusConexao: 'Desconectado',
+  ultimoSincronismo: undefined,
   webhookAtivo: true,
   aliasServidor: 'Safira Portal Comercial',
   logsSincronizacao: initialSyncLogs
@@ -493,12 +493,20 @@ async function loadFromFirestore() {
     const fsBling = blingSnap.exists() ? blingSnap.data() : null;
     const diskBling = diskData?.blingConfig || null;
 
-    // Merge Bling config prioritising real saved non-default credentials from Firestore or Disk
+    // Merge Bling config prioritising real saved credentials from Firestore or Disk
     const mergedBlingConfig = {
-      ...defaultStore.blingConfig,
+      ...initialBlingConfig,
       ...(diskBling || {}),
       ...(fsBling || {})
     };
+
+    // Ensure non-empty saved credentials are never overwritten by empty initial values
+    if (diskBling?.apiKey && !mergedBlingConfig.apiKey) mergedBlingConfig.apiKey = diskBling.apiKey;
+    if (fsBling?.apiKey) mergedBlingConfig.apiKey = fsBling.apiKey;
+    if (diskBling?.clientId && !mergedBlingConfig.clientId) mergedBlingConfig.clientId = diskBling.clientId;
+    if (fsBling?.clientId) mergedBlingConfig.clientId = fsBling.clientId;
+    if (diskBling?.clientSecret && !mergedBlingConfig.clientSecret) mergedBlingConfig.clientSecret = diskBling.clientSecret;
+    if (fsBling?.clientSecret) mergedBlingConfig.clientSecret = fsBling.clientSecret;
 
     if (promotoras.length === 0 && clientes.length === 0) {
       console.log("🔥 Firestore collections vazias. Semeando dados iniciais da Safira Cosméticos...");

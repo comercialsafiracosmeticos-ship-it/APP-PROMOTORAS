@@ -69,6 +69,11 @@
         "status": { "type": "string" },
         "fotoDisplay": { "type": "string" },
         "fotoFachada": { "type": "string" },
+        "fotosGondola": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Fotos da gôndola/exposição registradas via câmera na visita"
+        },
         "comentarios": { "type": "string" },
         "pecasVendidas": { "type": "number" }
       },

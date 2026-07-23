@@ -10,7 +10,7 @@ import {
   Promotora, Cliente, Pedido, Produto, Visita, Escala, Atestado, BlingConfig, MetaVendaPromotora 
 } from './types';
 import { Sparkles, Compass, AlertCircle, ShoppingBag, Loader2, ArrowRight } from 'lucide-react';
-import { auth, onAuthStateChanged, testFirestoreConnection, FirebaseUser } from './lib/firebase';
+import { auth, onAuthStateChanged, testFirestoreConnection, FirebaseUser, saveVisitaToFirestore, updateVisitaInFirestore, saveBlingConfigToFirestore, getBlingConfigFromFirestore } from './lib/firebase';
 
 export default function App() {
   const [loading, setLoading] = useState(true);
@@ -93,7 +93,50 @@ export default function App() {
           setEscalas(store.escalas || []);
           setAtestados(store.atestados || []);
           setMetasVendas(store.metasVendas || []);
-          setBlingConfig(store.blingConfig || {});
+          
+          let serverBling = store.blingConfig || {};
+          
+          // Check localStorage fallback for persisted credentials
+          let localBling: any = null;
+          try {
+            const raw = localStorage.getItem('safira_bling_config');
+            if (raw) localBling = JSON.parse(raw);
+          } catch (e) {
+            console.error("Error reading safira_bling_config from localStorage", e);
+          }
+
+          // Merge: local storage / Firestore > server defaults
+          let finalBlingConfig = { ...serverBling };
+          if (localBling) {
+            if (localBling.apiKey) finalBlingConfig.apiKey = localBling.apiKey;
+            if (localBling.clientId) finalBlingConfig.clientId = localBling.clientId;
+            if (localBling.clientSecret) finalBlingConfig.clientSecret = localBling.clientSecret;
+            if (localBling.aliasServidor) finalBlingConfig.aliasServidor = localBling.aliasServidor;
+            if (localBling.webhookAtivo !== undefined) finalBlingConfig.webhookAtivo = localBling.webhookAtivo;
+          }
+
+          // Fetch directly from Firestore doc settings/bling if local & server lack credentials
+          if (!finalBlingConfig.apiKey && !finalBlingConfig.clientId) {
+            try {
+              const fsBling = await getBlingConfigFromFirestore();
+              if (fsBling) {
+                finalBlingConfig = { ...finalBlingConfig, ...fsBling };
+              }
+            } catch (err) {
+              console.error("Error loading Bling config from Firestore", err);
+            }
+          }
+
+          setBlingConfig(finalBlingConfig);
+          if (finalBlingConfig.apiKey || finalBlingConfig.clientId) {
+            localStorage.setItem('safira_bling_config', JSON.stringify(finalBlingConfig));
+            // Sync to backend to keep server memory updated
+            fetch('/api/bling/config', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(finalBlingConfig)
+            }).catch(() => {});
+          }
 
           if (store.promotoras && store.promotoras.length > 0) {
             const savedId = localStorage.getItem('safira_active_user_id');
@@ -227,6 +270,9 @@ export default function App() {
     const updatedVisits = [...visitas, newVisit];
     setVisitas(updatedVisits);
 
+    // Persist to Firestore
+    saveVisitaToFirestore(newVisit).catch(err => console.warn("Erro ao salvar no Firestore:", err));
+
     await saveToBackend({
       promotoras,
       clientes,
@@ -242,6 +288,9 @@ export default function App() {
   const handleUpdateVisita = async (id: string, updated: Partial<Visita>) => {
     const updatedVisits = visitas.map(v => v.id === id ? { ...v, ...updated } as Visita : v);
     setVisitas(updatedVisits);
+
+    // Persist to Firestore
+    updateVisitaInFirestore(id, updated).catch(err => console.warn("Erro ao atualizar no Firestore:", err));
 
     await saveToBackend({
       promotoras,
@@ -346,6 +395,12 @@ export default function App() {
   const handleSaveBlingConfig = async (updated: Partial<BlingConfig>) => {
     const updatedConfig = { ...blingConfig, ...updated };
     setBlingConfig(updatedConfig);
+    
+    // Save to localStorage as immediate persistent backup
+    localStorage.setItem('safira_bling_config', JSON.stringify(updatedConfig));
+
+    // Save directly to Firestore doc
+    saveBlingConfigToFirestore(updatedConfig);
 
     try {
       await fetch('/api/bling/config', {

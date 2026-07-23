@@ -5,7 +5,7 @@ import {
   FileText, TrendingUp, Settings, Plus, Trash2, Edit2, 
   Upload, Sparkles, User, AlertOctagon, Info, Eye, ArrowRight,
   Bell, Lock, Unlock, Compass, RefreshCw, UserCheck, Store, Phone,
-  Key, Copy, Send, LogIn, Share2, Shield
+  Key, Copy, Send, LogIn, Share2, Shield, Maximize2, Image as ImageIcon
 } from 'lucide-react';
 import { 
   Promotora, Cliente, Visita, Escala, Atestado, Produto, AuditoriaItem, ProdutoVencer, AnaliseConcorrente 
@@ -204,6 +204,9 @@ export default function PromotoraConsole({
   const [analiseConcorrencia, setAnaliseConcorrencia] = useState<AnaliseConcorrente[]>([]);
   const [fotoDisplay, setFotoDisplay] = useState<string>('');
   const [fotoFachada, setFotoFachada] = useState<string>('');
+  const [fotosGondola, setFotosGondola] = useState<string[]>([]);
+  const [uploadingGondolaPhoto, setUploadingGondolaPhoto] = useState<boolean>(false);
+  const [selectedPreviewImage, setSelectedPreviewImage] = useState<string | null>(null);
   const [comentarios, setComentarios] = useState('');
   const [pecasVendidas, setPecasVendidas] = useState<number>(0);
 
@@ -311,6 +314,7 @@ export default function PromotoraConsole({
       setAnaliseConcorrencia(checkinEmAndamento.analiseConcorrencia || []);
       setFotoDisplay(checkinEmAndamento.fotoDisplay || '');
       setFotoFachada(checkinEmAndamento.fotoFachada || '');
+      setFotosGondola(checkinEmAndamento.fotosGondola || []);
       setComentarios(checkinEmAndamento.comentarios || '');
       setPecasVendidas(checkinEmAndamento.pecasVendidas || 0);
       
@@ -327,6 +331,9 @@ export default function PromotoraConsole({
       }
     } else {
       setActiveVisita(null);
+      setFotoDisplay('');
+      setFotoFachada('');
+      setFotosGondola([]);
       setPontoEntradaManha('');
       setPontoSaidaAlmoco('');
       setPontoVoltaAlmoco('');
@@ -625,6 +632,80 @@ export default function PromotoraConsole({
     }
   };
 
+  // Canvas image compression helper to keep Firestore payloads fast and lightweight
+  const compressImage = (file: File, maxWidth = 1200, quality = 0.8): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', quality));
+          } else {
+            resolve(event.target?.result as string);
+          }
+        };
+        img.onerror = reject;
+        img.src = event.target?.result as string;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // Upload or capture Gondola photo via mobile camera / file input
+  const handleGondolaPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setUploadingGondolaPhoto(true);
+    try {
+      const newPhotos: string[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const compressed = await compressImage(files[i]);
+        newPhotos.push(compressed);
+      }
+      const updatedList = [...fotosGondola, ...newPhotos];
+      setFotosGondola(updatedList);
+
+      // Save directly to active visit in Firestore
+      if (activeVisita) {
+        await onUpdateVisita(activeVisita.id, { fotosGondola: updatedList });
+      }
+      triggerPushAlert(
+        'Foto da Gôndola', 
+        `${newPhotos.length} foto(s) da gôndola registrada(s) e salva(s) no Firestore com sucesso!`, 
+        'success'
+      );
+    } catch (err) {
+      console.error("Erro ao processar foto da gôndola:", err);
+      triggerPushAlert('Erro na Câmera', 'Não foi possível salvar a imagem da gôndola. Tente novamente.', 'warning');
+    } finally {
+      setUploadingGondolaPhoto(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleRemoveGondolaPhoto = async (index: number) => {
+    const updatedList = fotosGondola.filter((_, idx) => idx !== index);
+    setFotosGondola(updatedList);
+    if (activeVisita) {
+      await onUpdateVisita(activeVisita.id, { fotosGondola: updatedList });
+    }
+    triggerPushAlert('Foto Removida', 'Foto da gôndola removida e atualizada no Firestore.', 'info');
+  };
+
   // Conclude check-in / check-out
   const handleCheckOut = async () => {
     if (!activeVisita) return;
@@ -635,6 +716,7 @@ export default function PromotoraConsole({
       gpsSaida: gpsData || { lat: -20.3155, lng: -40.3121, accuracy: 15 },
       fotoDisplay,
       fotoFachada,
+      fotosGondola,
       comentarios,
       pecasVendidas,
       auditoriaGondola,
@@ -651,6 +733,9 @@ export default function PromotoraConsole({
     setSelectedClienteId('');
     setGpsData(null);
     setGpsStatus('idle');
+    setFotosGondola([]);
+    setFotoDisplay('');
+    setFotoFachada('');
     setPontoEntradaManha('');
     setPontoSaidaAlmoco('');
     setPontoVoltaAlmoco('');
@@ -1982,44 +2067,187 @@ export default function PromotoraConsole({
           {/* Coluna da Direita (Fotos do Display, Comentários, Peças Vendidas, Concluir) */}
           <div className="lg:col-span-4 space-y-6">
             
-            {/* CARD: FOTOS DO DISPLAY / PDV */}
+            {/* CARD: FOTOS DA GÔNDOLA / EXPOSIÇÃO NO PDV (CAPTUROU DIRETO DA CÂMERA & FIRESTORE) */}
+            <div className="bg-[#161618] rounded-2xl border border-amber-500/30 p-6 space-y-4 shadow-xl relative overflow-hidden">
+              <div className="absolute top-0 right-0 bg-gradient-to-l from-amber-500/20 to-transparent px-3 py-1 rounded-bl-xl text-[10px] font-bold text-amber-400 flex items-center gap-1">
+                <Sparkles className="w-3 h-3" />
+                Salvo no Firestore
+              </div>
+
+              <div className="border-b border-white/10 pb-2">
+                <h3 className="font-display font-bold text-sm text-white flex items-center gap-2">
+                  <Camera className="w-4 h-4 text-amber-400" />
+                  FOTOS DA GÔNDOLA E EXPOSIÇÃO
+                </h3>
+                <p className="text-[11px] text-white/50 mt-0.5 leading-tight">
+                  Tire fotos da gôndola, ilha de cosméticos e displays com a câmera do celular para vincular a esta visita.
+                </p>
+              </div>
+
+              {/* Action Buttons for Mobile Camera & Gallery */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {/* 1. Botão Câmera do Celular */}
+                <label className="cursor-pointer bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-gray-950 font-bold p-3 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 transition-all hover:scale-[1.02] active:scale-[0.98]">
+                  <Camera className="w-4 h-4 shrink-0" />
+                  <span>Tirar Foto na Câmera</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={handleGondolaPhotoUpload}
+                    disabled={uploadingGondolaPhoto}
+                    className="hidden"
+                  />
+                </label>
+
+                {/* 2. Botão Galeria / Várias Fotos */}
+                <label className="cursor-pointer bg-[#1F1F22] hover:bg-white/10 text-white border border-white/15 font-bold p-3 rounded-xl text-xs flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98]">
+                  <Upload className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span>Galeria / Anexar Várias</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={handleGondolaPhotoUpload}
+                    disabled={uploadingGondolaPhoto}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+
+              {uploadingGondolaPhoto && (
+                <div className="bg-amber-500/10 border border-amber-500/30 p-3 rounded-xl flex items-center gap-3 text-amber-400 text-xs font-semibold animate-pulse">
+                  <div className="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin shrink-0" />
+                  <span>Otimizando e vinculando imagem no Firestore...</span>
+                </div>
+              )}
+
+              {/* Photos Gallery Grid */}
+              {fotosGondola.length > 0 ? (
+                <div className="space-y-2 pt-1">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="font-bold text-white/70">
+                      Gôndolas Capturadas ({fotosGondola.length}):
+                    </span>
+                    <span className="text-[10px] text-emerald-400 font-mono">
+                      ✓ Vinculadas ao Registro
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2.5 max-h-64 overflow-y-auto pr-1 custom-scrollbar">
+                    {fotosGondola.map((imgUrl, idx) => (
+                      <div
+                        key={idx}
+                        className="group relative bg-[#1A1A1E] border border-white/10 rounded-xl overflow-hidden shadow-md hover:border-amber-500/50 transition-all"
+                      >
+                        <img
+                          src={imgUrl}
+                          alt={`Gôndola ${idx + 1}`}
+                          className="w-full h-24 object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                        <div className="absolute top-1 left-1 bg-black/70 backdrop-blur-sm text-[9px] font-bold text-white px-1.5 py-0.5 rounded border border-white/10">
+                          Gôndola #{idx + 1}
+                        </div>
+
+                        {/* Hover Overlay Actions */}
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedPreviewImage(imgUrl)}
+                            className="bg-amber-500 hover:bg-amber-400 text-gray-950 p-1.5 rounded-lg text-xs font-bold transition-all shadow cursor-pointer"
+                            title="Expandir Foto"
+                          >
+                            <Maximize2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveGondolaPhoto(idx)}
+                            className="bg-red-500 hover:bg-red-600 text-white p-1.5 rounded-lg text-xs font-bold transition-all shadow cursor-pointer"
+                            title="Remover Foto"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="border border-dashed border-white/10 rounded-xl p-4 text-center bg-[#1F1F22]/50 text-white/40 text-xs space-y-1">
+                  <ImageIcon className="w-6 h-6 mx-auto text-white/20 mb-1" />
+                  <p className="font-bold text-white/60">Nenhuma foto da gôndola capturada ainda.</p>
+                  <p className="text-[10px] text-white/35">Clique no botão acima para acionar a câmera do seu celular.</p>
+                </div>
+              )}
+            </div>
+
+            {/* CARD: FOTOS DO DISPLAY & FACHADA DO PDV */}
             <div className="bg-[#161618] rounded-2xl border border-white/10 p-6 space-y-4 shadow-lg">
               <div className="border-b border-white/10 pb-2 flex justify-between items-center">
                 <h3 className="font-display font-bold text-sm text-white flex items-center gap-1.5">
                   <Camera className="w-4 h-4 text-amber-400" />
-                  FOTOS DO DISPLAY / PDV
+                  DISPLAY & FACHADA PRINCIPAL
                 </h3>
-                <span className="text-[10px] text-white/40 font-mono">JPG, PNG</span>
+                <span className="text-[10px] text-white/40 font-mono">OPCIONAL</span>
               </div>
 
-              {/* Upload Zone */}
-              <div className="border-2 border-dashed border-white/10 hover:border-amber-500/50 rounded-xl p-6 text-center cursor-pointer relative bg-[#1F1F22] transition-all">
-                {fotoDisplay ? (
-                  <div className="space-y-3">
-                    <img src={fotoDisplay} alt="Foto Display" className="max-h-48 mx-auto rounded-lg object-cover shadow-md" referrerPolicy="no-referrer" />
-                    <button
-                      type="button"
-                      onClick={() => setFotoDisplay('')}
-                      className="text-xs text-red-400 font-bold hover:underline transition-all cursor-pointer"
-                    >
-                      Remover Imagem
-                    </button>
-                  </div>
-                ) : (
-                  <label className="cursor-pointer block space-y-2">
-                    <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-1">
-                      <Camera className="w-5 h-5 text-white/60" />
+              <div className="grid grid-cols-2 gap-2.5">
+                {/* Upload Display */}
+                <div className="border border-dashed border-white/10 hover:border-amber-500/50 rounded-xl p-3 text-center cursor-pointer relative bg-[#1F1F22] transition-all">
+                  {fotoDisplay ? (
+                    <div className="space-y-2">
+                      <img src={fotoDisplay} alt="Display" className="h-20 w-full object-cover rounded-lg shadow-md" referrerPolicy="no-referrer" />
+                      <button
+                        type="button"
+                        onClick={() => setFotoDisplay('')}
+                        className="text-[10px] text-red-400 font-bold hover:underline transition-all cursor-pointer block mx-auto"
+                      >
+                        Remover
+                      </button>
                     </div>
-                    <p className="text-xs font-bold text-white">Tirar foto ou anexar imagem</p>
-                    <p className="text-[10px] text-white/40 leading-normal">Clique para abrir a câmera ou galeria do dispositivo</p>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleDisplayPhotoUpload}
-                      className="hidden"
-                    />
-                  </label>
-                )}
+                  ) : (
+                    <label className="cursor-pointer block space-y-1">
+                      <Camera className="w-4 h-4 text-white/50 mx-auto" />
+                      <p className="text-[10px] font-bold text-white">Foto Display</p>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={handleDisplayPhotoUpload}
+                        className="hidden"
+                      />
+                    </label>
+                  )}
+                </div>
+
+                {/* Upload Fachada */}
+                <div className="border border-dashed border-white/10 hover:border-amber-500/50 rounded-xl p-3 text-center cursor-pointer relative bg-[#1F1F22] transition-all">
+                  {fotoFachada ? (
+                    <div className="space-y-2">
+                      <img src={fotoFachada} alt="Fachada" className="h-20 w-full object-cover rounded-lg shadow-md" referrerPolicy="no-referrer" />
+                      <button
+                        type="button"
+                        onClick={() => setFotoFachada('')}
+                        className="text-[10px] text-red-400 font-bold hover:underline transition-all cursor-pointer block mx-auto"
+                      >
+                        Remover
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="cursor-pointer block space-y-1">
+                      <Camera className="w-4 h-4 text-white/50 mx-auto" />
+                      <p className="text-[10px] font-bold text-white">Foto Fachada</p>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={handleFachadaPhotoUpload}
+                        className="hidden"
+                      />
+                    </label>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -2169,23 +2397,59 @@ export default function PromotoraConsole({
 
                     {/* Photo evidence */}
                     <div className="space-y-2">
-                      <h5 className="font-bold text-xs text-white/40 uppercase tracking-wider text-[10px]">Evidências Fotográficas</h5>
-                      <div className="flex gap-2">
-                        {v.fotoDisplay ? (
-                          <div className="flex-1 text-center bg-[#1F1F22] border border-white/10 p-1 rounded-lg">
-                            <img src={v.fotoDisplay} alt="Display" className="h-20 w-full object-cover rounded" />
-                            <span className="text-[9px] text-white/50 mt-1 block">Display</span>
-                          </div>
-                        ) : (
-                          <div className="flex-1 bg-[#1F1F22] border border-white/5 flex items-center justify-center rounded-lg text-[10px] text-white/30 h-20">display ausente</div>
+                      <div className="flex justify-between items-center">
+                        <h5 className="font-bold text-xs text-white/40 uppercase tracking-wider text-[10px]">Evidências Fotográficas & Gôndola</h5>
+                        {v.fotosGondola && v.fotosGondola.length > 0 && (
+                          <span className="text-[10px] text-amber-400 font-bold bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded">
+                            {v.fotosGondola.length} foto(s) de gôndola
+                          </span>
                         )}
-                        {v.fotoFachada ? (
-                          <div className="flex-1 text-center bg-[#1F1F22] border border-white/10 p-1 rounded-lg">
-                            <img src={v.fotoFachada} alt="Fachada" className="h-20 w-full object-cover rounded" />
-                            <span className="text-[9px] text-white/50 mt-1 block">Fachada</span>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        {v.fotosGondola && v.fotosGondola.map((gImg, gIdx) => (
+                          <div 
+                            key={gIdx} 
+                            onClick={() => setSelectedPreviewImage(gImg)}
+                            className="group relative cursor-pointer bg-[#1F1F22] border border-amber-500/30 hover:border-amber-400 p-1 rounded-lg overflow-hidden transition-all"
+                            title="Clique para expandir"
+                          >
+                            <img src={gImg} alt={`Gôndola ${gIdx + 1}`} className="h-20 w-20 object-cover rounded" referrerPolicy="no-referrer" />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
+                              <Maximize2 className="w-4 h-4 text-amber-400" />
+                            </div>
+                            <span className="text-[8px] font-bold text-amber-300 bg-black/80 px-1 rounded absolute bottom-1 left-1">
+                              Gôndola #{gIdx + 1}
+                            </span>
                           </div>
-                        ) : (
-                          <div className="flex-1 bg-[#1F1F22] border border-white/5 flex items-center justify-center rounded-lg text-[10px] text-white/30 h-20">fachada ausente</div>
+                        ))}
+
+                        {v.fotoDisplay && (
+                          <div 
+                            onClick={() => setSelectedPreviewImage(v.fotoDisplay!)}
+                            className="cursor-pointer group relative bg-[#1F1F22] border border-white/10 p-1 rounded-lg hover:border-amber-500/40 transition-all"
+                            title="Clique para expandir"
+                          >
+                            <img src={v.fotoDisplay} alt="Display" className="h-20 w-20 object-cover rounded" referrerPolicy="no-referrer" />
+                            <span className="text-[9px] text-white/70 mt-0.5 block text-center font-bold">Display</span>
+                          </div>
+                        )}
+
+                        {v.fotoFachada && (
+                          <div 
+                            onClick={() => setSelectedPreviewImage(v.fotoFachada!)}
+                            className="cursor-pointer group relative bg-[#1F1F22] border border-white/10 p-1 rounded-lg hover:border-amber-500/40 transition-all"
+                            title="Clique para expandir"
+                          >
+                            <img src={v.fotoFachada} alt="Fachada" className="h-20 w-20 object-cover rounded" referrerPolicy="no-referrer" />
+                            <span className="text-[9px] text-white/70 mt-0.5 block text-center font-bold">Fachada</span>
+                          </div>
+                        )}
+
+                        {(!v.fotosGondola || v.fotosGondola.length === 0) && !v.fotoDisplay && !v.fotoFachada && (
+                          <div className="w-full bg-[#1F1F22] border border-white/5 flex items-center justify-center rounded-lg text-[10px] text-white/30 h-16">
+                            Sem evidências fotográficas anexadas
+                          </div>
                         )}
                       </div>
                     </div>
@@ -2988,13 +3252,44 @@ export default function PromotoraConsole({
                         {/* Col 3: REGISTRO FOTOGRÁFICO */}
                         <div className="bg-[#1C1C1F]/40 border border-white/5 rounded-xl p-3.5 space-y-2 flex flex-col justify-between">
                           <span className="block text-[10px] font-bold text-white/40 uppercase tracking-wider">Registro Fotográfico</span>
-                          {v.fotoDisplay ? (
-                            <div className="flex gap-2 items-center bg-[#1F1F22] p-1.5 rounded-lg border border-white/10">
-                              <img src={v.fotoDisplay} alt="Foto Display" className="w-14 h-14 object-cover rounded-md shrink-0" referrerPolicy="no-referrer" />
-                              <div className="text-[10px] overflow-hidden">
-                                <p className="font-bold text-white truncate">foto_display.jpg</p>
-                                <p className="text-white/40">Gôndola organizada</p>
+                          {(v.fotosGondola && v.fotosGondola.length > 0) || v.fotoDisplay || v.fotoFachada ? (
+                            <div className="space-y-1.5">
+                              <div className="flex flex-wrap gap-1.5">
+                                {v.fotosGondola && v.fotosGondola.map((gImg, gIdx) => (
+                                  <img
+                                    key={gIdx}
+                                    src={gImg}
+                                    alt={`Gôndola ${gIdx + 1}`}
+                                    onClick={() => setSelectedPreviewImage(gImg)}
+                                    className="w-12 h-12 object-cover rounded-lg border border-amber-500/30 hover:border-amber-400 cursor-pointer transition-all hover:scale-105"
+                                    title={`Gôndola #${gIdx + 1} - Clique para expandir`}
+                                    referrerPolicy="no-referrer"
+                                  />
+                                ))}
+                                {v.fotoDisplay && (
+                                  <img
+                                    src={v.fotoDisplay}
+                                    alt="Display"
+                                    onClick={() => setSelectedPreviewImage(v.fotoDisplay!)}
+                                    className="w-12 h-12 object-cover rounded-lg border border-white/10 hover:border-amber-400 cursor-pointer transition-all hover:scale-105"
+                                    title="Foto do Display"
+                                    referrerPolicy="no-referrer"
+                                  />
+                                )}
+                                {v.fotoFachada && (
+                                  <img
+                                    src={v.fotoFachada}
+                                    alt="Fachada"
+                                    onClick={() => setSelectedPreviewImage(v.fotoFachada!)}
+                                    className="w-12 h-12 object-cover rounded-lg border border-white/10 hover:border-amber-400 cursor-pointer transition-all hover:scale-105"
+                                    title="Foto da Fachada"
+                                    referrerPolicy="no-referrer"
+                                  />
+                                )}
                               </div>
+                              <span className="text-[9px] text-amber-400/80 font-mono block">
+                                {v.fotosGondola?.length || 0} gôndola(s) registrada(s)
+                              </span>
                             </div>
                           ) : (
                             <div className="flex flex-col items-center justify-center border border-dashed border-white/10 rounded-lg py-4 text-white/30 text-[10px]">
@@ -3916,6 +4211,53 @@ export default function PromotoraConsole({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE LIGHTBOX / VISUALIZAÇÃO DE FOTOS DA GÔNDOLA EM ALTA RESOLUÇÃO */}
+      {selectedPreviewImage && (
+        <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex flex-col items-center justify-center p-4">
+          <div className="relative max-w-4xl w-full max-h-[90vh] flex flex-col items-center justify-center space-y-4">
+            <div className="flex justify-between items-center w-full px-2">
+              <span className="text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-full flex items-center gap-1.5">
+                <Camera className="w-3.5 h-3.5" />
+                Evidência Fotográfica em Alta Resolução (Firestore)
+              </span>
+              <button
+                type="button"
+                onClick={() => setSelectedPreviewImage(null)}
+                className="bg-white/10 hover:bg-white/20 text-white rounded-full px-3 py-1.5 transition-all cursor-pointer font-bold text-xs"
+              >
+                ✕ Fechar
+              </button>
+            </div>
+            
+            <div className="overflow-hidden rounded-2xl border border-white/15 bg-black/50 shadow-2xl max-h-[75vh] flex items-center justify-center">
+              <img
+                src={selectedPreviewImage}
+                alt="Foto da Gôndola"
+                className="max-h-[75vh] max-w-full object-contain rounded-xl"
+                referrerPolicy="no-referrer"
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <a
+                href={selectedPreviewImage}
+                download="foto_gondola_pdv.jpg"
+                className="bg-amber-500 hover:bg-amber-600 text-gray-950 font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-lg shadow-amber-500/20"
+              >
+                <Upload className="w-3.5 h-3.5 rotate-180" /> Baixar Foto em Alta Definição
+              </a>
+              <button
+                type="button"
+                onClick={() => setSelectedPreviewImage(null)}
+                className="bg-[#1F1F22] hover:bg-white/10 text-white border border-white/10 font-bold px-4 py-2 rounded-xl text-xs transition-all cursor-pointer"
+              >
+                Voltar à Visita
+              </button>
+            </div>
           </div>
         </div>
       )}
