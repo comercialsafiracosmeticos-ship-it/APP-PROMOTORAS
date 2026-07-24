@@ -54,25 +54,68 @@ export default function AuthModal({
     setLoading(true);
 
     try {
+      const inputTrimmed = email.trim().toLowerCase();
+      
+      // Resolve username to email if necessary
+      let targetEmail = inputTrimmed;
+      const matchedProfile = promotoras.find(p => 
+        p.email?.toLowerCase() === inputTrimmed ||
+        p.usuario?.toLowerCase() === inputTrimmed ||
+        p.codigoBling?.toLowerCase() === inputTrimmed
+      );
+
+      if (matchedProfile && matchedProfile.email) {
+        targetEmail = matchedProfile.email.toLowerCase();
+      } else if (!targetEmail.includes('@')) {
+        targetEmail = `${targetEmail}@safiracosmeticos.com.br`;
+      }
+
       if (mode === 'signin') {
-        const credential = await signInWithEmailAndPassword(auth, email, password);
-        setSuccessMsg(`Login efetuado com sucesso via Firebase Auth (${credential.user.email})!`);
+        let credential: any = null;
+
+        try {
+          // 1. Try signing in with existing Firebase Auth account
+          credential = await signInWithEmailAndPassword(auth, targetEmail, password);
+          setSuccessMsg(`Login efetuado com sucesso via Firebase Auth (${credential.user.email})!`);
+        } catch (signInErr: any) {
+          // 2. If account does not exist in Firebase Auth yet, auto-register on first sign in
+          if (
+            signInErr.code === 'auth/user-not-found' ||
+            signInErr.code === 'auth/invalid-credential'
+          ) {
+            try {
+              credential = await createUserWithEmailAndPassword(auth, targetEmail, password);
+              setSuccessMsg(`Conta registrada e autenticada no Firebase Auth (${credential.user.email})!`);
+            } catch (createErr: any) {
+              if (createErr.code === 'auth/email-already-in-use') {
+                throw new Error('Senha incorreta para esta conta do Firebase Auth. Verifique sua senha.');
+              } else if (createErr.code === 'auth/weak-password') {
+                throw new Error('A senha precisa ter no mínimo 6 caracteres.');
+              } else {
+                throw createErr;
+              }
+            }
+          } else if (signInErr.code === 'auth/wrong-password') {
+            throw new Error('Senha incorreta.');
+          } else {
+            throw signInErr;
+          }
+        }
         
         // Find or map corresponding user profile
-        const matched = promotoras.find(p => p.email?.toLowerCase() === email.toLowerCase()) ||
-                        promotoras.find(p => p.usuario?.toLowerCase() === email.toLowerCase());
+        const matched = matchedProfile || promotoras.find(p => p.email?.toLowerCase() === targetEmail);
         if (matched) {
           onSelectUser(matched);
         } else {
-          // If no match found, create dynamic promotora profile
-          const isMasterAdmin = email.toLowerCase().includes('admin') || email.toLowerCase() === 'comercial.safiracosmeticos@gmail.com';
+          // If no match found in system promotoras, create dynamic promotora profile
+          const isMasterAdmin = targetEmail.includes('admin') || targetEmail === 'comercial.safiracosmeticos@gmail.com';
           const newUser: Promotora = {
             id: 'prom-fb-' + credential.user.uid.substr(0, 8),
-            nome: credential.user.displayName || email.split('@')[0],
+            nome: credential.user.displayName || targetEmail.split('@')[0],
             codigoBling: 'FB-' + credential.user.uid.substr(0, 5),
             telefone: '(27) 99999-0000',
-            email: email,
-            usuario: email.split('@')[0],
+            email: targetEmail,
+            usuario: targetEmail.split('@')[0],
             status: 'Ativa',
             role: isMasterAdmin ? 'Admin' : 'Promotora'
           };
@@ -80,8 +123,8 @@ export default function AuthModal({
         }
         setTimeout(() => onClose(), 1200);
       } else {
-        // Sign Up
-        const credential = await createUserWithEmailAndPassword(auth, email, password);
+        // Sign Up Mode
+        const credential = await createUserWithEmailAndPassword(auth, targetEmail, password);
         if (displayName) {
           await updateProfile(credential.user, { displayName });
         }
@@ -89,11 +132,11 @@ export default function AuthModal({
 
         const newUser: Promotora = {
           id: 'prom-fb-' + credential.user.uid.substr(0, 8),
-          nome: displayName || email.split('@')[0],
+          nome: displayName || targetEmail.split('@')[0],
           codigoBling: 'FB-' + credential.user.uid.substr(0, 5),
           telefone: '(27) 99999-0000',
-          email: email,
-          usuario: email.split('@')[0],
+          email: targetEmail,
+          usuario: targetEmail.split('@')[0],
           status: 'Ativa',
           role: roleSelection
         };
@@ -102,13 +145,13 @@ export default function AuthModal({
       }
     } catch (err: any) {
       console.error("Firebase Auth Error:", err);
-      let msg = "Falha ao autenticar no Firebase Auth.";
+      let msg = err.message || "Falha ao autenticar no Firebase Auth.";
       if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
-        msg = "Senha ou e-mail incorretos.";
+        msg = "Senha incorreta. Verifique suas credenciais de e-mail e senha.";
       } else if (err.code === 'auth/user-not-found') {
         msg = "Usuário não encontrado no Firebase Auth.";
       } else if (err.code === 'auth/email-already-in-use') {
-        msg = "Este e-mail já está cadastrado no Firebase Auth.";
+        msg = "Este e-mail já está cadastrado com outra senha no Firebase Auth.";
       } else if (err.code === 'auth/weak-password') {
         msg = "A senha deve ter no mínimo 6 caracteres.";
       }
@@ -299,6 +342,24 @@ export default function AuthModal({
           </button>
         </div>
 
+        {/* Admin Credential Quick Reference Banner */}
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-xs space-y-1.5 text-amber-200">
+          <div className="font-bold text-amber-400 flex items-center justify-between">
+            <span className="flex items-center gap-1.5">
+              <Shield className="w-3.5 h-3.5" /> Credenciais do Administrador Master
+            </span>
+            <span className="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.2 rounded font-mono">ADMIN</span>
+          </div>
+          <div className="font-mono text-[11px] text-amber-300/90 leading-relaxed bg-[#141416]/60 p-2 rounded-lg border border-amber-500/20">
+            • E-mail: <strong className="text-white">comercial.safiracosmeticos@gmail.com</strong><br />
+            • Usuário: <strong className="text-white">admin.safira</strong><br />
+            • Senha: <strong className="text-amber-300 font-bold">safira2026</strong> (ou safira123)
+          </div>
+          <p className="text-[10px] text-white/60 leading-tight">
+            💡 No primeiro acesso com estas credenciais, sua conta de Administrador será criada e autenticada automaticamente no Firebase Auth.
+          </p>
+        </div>
+
         {/* Login / Register Form */}
         <form onSubmit={handleSubmit} className="space-y-3">
           {mode === 'signup' && (
@@ -351,14 +412,14 @@ export default function AuthModal({
           )}
 
           <div>
-            <label className="block text-[11px] font-semibold text-white/60 mb-1">E-mail Cadastrado</label>
+            <label className="block text-[11px] font-semibold text-white/60 mb-1">E-mail ou Usuário de Acesso</label>
             <div className="relative">
               <Mail className="w-4 h-4 text-white/40 absolute left-3 top-2.5" />
               <input
-                type="email"
+                type="text"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="exemplo@safiracosmeticos.com.br"
+                placeholder="comercial.safiracosmeticos@gmail.com ou admin.safira"
                 required
                 className="w-full bg-[#222226] border border-white/10 rounded-xl pl-9 pr-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
               />
