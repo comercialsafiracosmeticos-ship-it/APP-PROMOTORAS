@@ -165,13 +165,13 @@ export default function BlingPanel({
             </span>
           </div>
 
-          {onClearTestData && pedidos.some(p => p.id.startsWith('ped-sync-') || p.id.startsWith('ped-0')) && (
+          {onClearTestData && (
             <button
               onClick={onClearTestData}
               className="flex items-center gap-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer"
-              title="Remover pedidos e clientes fictícios de teste"
+              title="Zerar simulações, histórico de visitas e dados de teste para início definitivo de uso em produção"
             >
-              Limpar Pedidos de Teste
+              🧹 Zerar Simulações (Modo Produção)
             </button>
           )}
 

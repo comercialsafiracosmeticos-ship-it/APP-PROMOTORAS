@@ -6,11 +6,27 @@ import ClientFinancePanel from './components/ClientFinancePanel';
 import DashboardBI from './components/DashboardBI';
 import SalesOrdersPanel from './components/SalesOrdersPanel';
 import AuthModal from './components/AuthModal';
+import OfflineStatusBanner from './components/OfflineStatusBanner';
+import { setLocalCache, getLocalCache, getPendingVisitas, syncPendingVisitasToFirestore } from './lib/offlineManager';
 import { 
-  Promotora, Cliente, Pedido, Produto, Visita, Escala, Atestado, BlingConfig, MetaVendaPromotora 
+  Promotora, Cliente, Pedido, Produto, Visita, Escala, Atestado, BlingConfig, MetaVendaPromotora, NotificacaoMeta 
 } from './types';
-import { Sparkles, Compass, AlertCircle, ShoppingBag, Loader2, ArrowRight } from 'lucide-react';
-import { auth, onAuthStateChanged, testFirestoreConnection, FirebaseUser, saveVisitaToFirestore, updateVisitaInFirestore, saveBlingConfigToFirestore, getBlingConfigFromFirestore } from './lib/firebase';
+import { Sparkles, Compass, AlertCircle, ShoppingBag, Loader2, ArrowRight, LogIn } from 'lucide-react';
+import { 
+  auth, 
+  onAuthStateChanged, 
+  firebaseSignOut,
+  testFirestoreConnection, 
+  FirebaseUser, 
+  saveVisitaToFirestore, 
+  updateVisitaInFirestore, 
+  saveBlingConfigToFirestore, 
+  getBlingConfigFromFirestore,
+  savePromotoraToFirestore,
+  updatePromotoraInFirestore,
+  deletePromotoraFromFirestore,
+  getPromotorasFromFirestore
+} from './lib/firebase';
 
 export default function App() {
   const [loading, setLoading] = useState(true);
@@ -30,6 +46,32 @@ export default function App() {
   const [escalas, setEscalas] = useState<Escala[]>([]);
   const [atestados, setAtestados] = useState<Atestado[]>([]);
   const [metasVendas, setMetasVendas] = useState<MetaVendaPromotora[]>([]);
+  const [notificacoes, setNotificacoes] = useState<NotificacaoMeta[]>(() => {
+    try {
+      const saved = localStorage.getItem('safira_notificacoes');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('safira_notificacoes', JSON.stringify(notificacoes));
+    } catch (e) {}
+  }, [notificacoes]);
+
+  const handleMarkNotificacaoRead = (id: string) => {
+    setNotificacoes(prev => prev.map(n => n.id === id ? { ...n, lida: true } : n));
+  };
+
+  const handleClearAllNotificacoes = (promotoraId?: string) => {
+    if (promotoraId) {
+      setNotificacoes(prev => prev.map(n => n.promotoraId === promotoraId ? { ...n, lida: true } : n));
+    } else {
+      setNotificacoes(prev => prev.map(n => ({ ...n, lida: true })));
+    }
+  };
   const [blingConfig, setBlingConfig] = useState<BlingConfig>({
     apiKey: '',
     clientId: '',
@@ -85,12 +127,56 @@ export default function App() {
         const res = await fetch('/api/store');
         if (res.ok) {
           const store = await res.json();
-          setPromotoras(store.promotoras || []);
-          setClientes(store.clientes || []);
+          let activeProms = store.promotoras || [];
+
+          // Query Firestore directly for promotoras if available
+          try {
+            const fsProms = await getPromotorasFromFirestore();
+            if (fsProms && fsProms.length > 0) {
+              activeProms = fsProms;
+            }
+          } catch (err) {
+            console.warn("Could not fetch promotoras directly from Firestore:", err);
+          }
+
+          // Ensure Anny is registered in the active team
+          const hasAnny = activeProms.some((p: Promotora) => p.nome?.toLowerCase().includes('anny'));
+          if (!hasAnny) {
+            const annyProm: Promotora = {
+              id: 'prom-05',
+              nome: 'Anny',
+              codigoBling: 'PROM07',
+              telefone: '(27) 99999-8888',
+              email: 'anny.promotora@safira.com.br',
+              usuario: 'anny',
+              senha: 'safira123',
+              status: 'Ativa',
+              avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+              role: 'Promotora'
+            };
+            activeProms.push(annyProm);
+            savePromotoraToFirestore(annyProm).catch(() => {});
+          }
+
+          setPromotoras(activeProms);
+          setLocalCache('promotoras', activeProms);
+
+          const loadedClientes = store.clientes || [];
+          const loadedVisitas = store.visitas || [];
+          const loadedEscalas = store.escalas || [];
+
+          setClientes(loadedClientes);
+          setLocalCache('clientes', loadedClientes);
+
           setProdutos(store.produtos || []);
           setPedidos(store.pedidos || []);
-          setVisitas(store.visitas || []);
-          setEscalas(store.escalas || []);
+
+          setVisitas(loadedVisitas);
+          setLocalCache('visitas', loadedVisitas);
+
+          setEscalas(loadedEscalas);
+          setLocalCache('escalas', loadedEscalas);
+
           setAtestados(store.atestados || []);
           setMetasVendas(store.metasVendas || []);
           
@@ -150,7 +236,21 @@ export default function App() {
           }
         }
       } catch (e) {
-        console.error("Error loading initial store data", e);
+        console.warn("Dispositivo offline ou erro de servidor. Carregando rotas e check-ins do cache local...", e);
+        const cachedVisitas = getLocalCache<Visita[]>('visitas', []);
+        const cachedClientes = getLocalCache<Cliente[]>('clientes', []);
+        const cachedEscalas = getLocalCache<Escala[]>('escalas', []);
+        const cachedPromotoras = getLocalCache<Promotora[]>('promotoras', []);
+        
+        if (cachedVisitas.length > 0) setVisitas(cachedVisitas);
+        if (cachedClientes.length > 0) setClientes(cachedClientes);
+        if (cachedEscalas.length > 0) setEscalas(cachedEscalas);
+        if (cachedPromotoras.length > 0) {
+          setPromotoras(cachedPromotoras);
+          const savedId = localStorage.getItem('safira_active_user_id');
+          const savedUser = cachedPromotoras.find((p) => p.id === savedId);
+          setActivePromotora(savedUser || cachedPromotoras[0]);
+        }
       } finally {
         setLoading(false);
       }
@@ -168,6 +268,17 @@ export default function App() {
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      await firebaseSignOut(auth);
+    } catch (e) {
+      console.warn("Erro ao deslogar do Firebase:", e);
+    }
+    localStorage.removeItem('safira_active_user_id');
+    setActivePromotora(null);
+    setShowAuthModal(true);
+  };
+
   // Update backend helper
   const saveToBackend = async (updatedStore: any) => {
     try {
@@ -181,7 +292,7 @@ export default function App() {
     }
   };
 
-  // State mutation actions synced with backend
+  // State mutation actions synced with backend & Cloud Firestore
   const handleAddPromotora = async (p: Omit<Promotora, 'id'>) => {
     const newProm: Promotora = {
       id: 'prom-' + Math.random().toString(36).substr(2, 9),
@@ -190,6 +301,11 @@ export default function App() {
     const updatedProms = [...promotoras, newProm];
     setPromotoras(updatedProms);
     
+    try {
+      localStorage.setItem('safira_promotoras_cache', JSON.stringify(updatedProms));
+    } catch (e) {}
+    savePromotoraToFirestore(newProm).catch(err => console.warn("Erro ao salvar promotora no Firestore:", err));
+
     await saveToBackend({
       promotoras: updatedProms,
       clientes,
@@ -198,6 +314,7 @@ export default function App() {
       visitas,
       escalas,
       atestados,
+      metasVendas,
       blingConfig
     });
   };
@@ -208,7 +325,12 @@ export default function App() {
     if (activePromotora?.id === id && updatedProms.length > 0) {
       setActivePromotora(updatedProms[0]);
     }
-    
+
+    try {
+      localStorage.setItem('safira_promotoras_cache', JSON.stringify(updatedProms));
+    } catch (e) {}
+    deletePromotoraFromFirestore(id).catch(err => console.warn("Erro ao excluir promotora do Firestore:", err));
+
     await saveToBackend({
       promotoras: updatedProms,
       clientes,
@@ -217,6 +339,7 @@ export default function App() {
       visitas,
       escalas,
       atestados,
+      metasVendas,
       blingConfig
     });
   };
@@ -227,6 +350,11 @@ export default function App() {
     const activeMatch = updatedProms.find(p => p.id === activePromotora?.id);
     if (activeMatch) setActivePromotora(activeMatch);
 
+    try {
+      localStorage.setItem('safira_promotoras_cache', JSON.stringify(updatedProms));
+    } catch (e) {}
+    updatePromotoraInFirestore(id, updated).catch(err => console.warn("Erro ao atualizar promotora no Firestore:", err));
+
     await saveToBackend({
       promotoras: updatedProms,
       clientes,
@@ -235,6 +363,7 @@ export default function App() {
       visitas,
       escalas,
       atestados,
+      metasVendas,
       blingConfig
     });
   };
@@ -269,6 +398,15 @@ export default function App() {
     };
     const updatedVisits = [...visitas, newVisit];
     setVisitas(updatedVisits);
+    setLocalCache('visitas', updatedVisits);
+
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      setSyncNotice({
+        message: `📱 Check-in em "${newVisit.clienteNome}" realizado com sucesso e salvo no celular (Modo Offline). Será enviado ao Firestore assim que houver conexão.`,
+        type: 'success'
+      });
+      setTimeout(() => setSyncNotice(null), 6000);
+    }
 
     // Persist to Firestore
     saveVisitaToFirestore(newVisit).catch(err => console.warn("Erro ao salvar no Firestore:", err));
@@ -288,6 +426,16 @@ export default function App() {
   const handleUpdateVisita = async (id: string, updated: Partial<Visita>) => {
     const updatedVisits = visitas.map(v => v.id === id ? { ...v, ...updated } as Visita : v);
     setVisitas(updatedVisits);
+    setLocalCache('visitas', updatedVisits);
+
+    const target = updatedVisits.find(v => v.id === id);
+    if (typeof navigator !== 'undefined' && !navigator.onLine && target) {
+      setSyncNotice({
+        message: `📱 Check-in/Checkout em "${target.clienteNome}" atualizado e salvo localmente (Modo Offline).`,
+        type: 'success'
+      });
+      setTimeout(() => setSyncNotice(null), 6000);
+    }
 
     // Persist to Firestore
     updateVisitaInFirestore(id, updated).catch(err => console.warn("Erro ao atualizar no Firestore:", err));
@@ -378,6 +526,30 @@ export default function App() {
   };
 
   const handleSaveMetas = async (updatedMetas: MetaVendaPromotora[]) => {
+    // Generate notification alerts for updated or added sales goals
+    const newNotifs: NotificacaoMeta[] = [];
+    updatedMetas.forEach(m => {
+      const prev = metasVendas.find(o => o.promotoraId === m.promotoraId && o.mesAno === m.mesAno);
+      if (!prev || prev.metaValor !== m.metaValor) {
+        newNotifs.push({
+          id: 'notif-' + Math.random().toString(36).substring(2, 9),
+          promotoraId: m.promotoraId,
+          promotoraNome: m.promotoraNome,
+          titulo: '🎯 Nova Meta de Vendas Atribuída',
+          mensagem: `O administrador definiu uma nova meta de vendas no valor de R$ ${m.metaValor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} para o mês ${m.mesAno}.`,
+          data: new Date().toISOString(),
+          lida: false,
+          tipo: 'meta',
+          metaValor: m.metaValor,
+          mesAno: m.mesAno
+        });
+      }
+    });
+
+    if (newNotifs.length > 0) {
+      setNotificacoes(prev => [...newNotifs, ...prev]);
+    }
+
     setMetasVendas(updatedMetas);
     await saveToBackend({
       promotoras,
@@ -597,30 +769,35 @@ export default function App() {
 
   const handleClearTestData = async () => {
     try {
-      const res = await fetch('/api/bling/clear-test-data', { method: 'POST' });
+      setSyncing(true);
+      const res = await fetch('/api/admin/reset-production', { method: 'POST' });
       const data = await res.json();
-      if (data.pedidos) setPedidos(data.pedidos);
-      if (data.clientes) setClientes(data.clientes);
       
-      await saveToBackend({
-        promotoras,
-        clientes: data.clientes || clientes,
-        produtos,
-        pedidos: data.pedidos || pedidos,
-        visitas,
-        escalas,
-        atestados,
-        blingConfig
-      });
+      setVisitas([]);
+      setEscalas([]);
+      setAtestados([]);
+      setMetasVendas([]);
+      setPedidos([]);
+      setClientes([]);
+      if (data.store?.promotoras) {
+        setPromotoras(data.store.promotoras);
+        try {
+          localStorage.setItem('safira_promotoras_cache', JSON.stringify(data.store.promotoras));
+        } catch (e) {}
+      }
+      if (data.store?.blingConfig) {
+        setBlingConfig(data.store.blingConfig);
+      }
 
       setSyncNotice({
-        message: data.message || 'Pedidos de teste removidos com sucesso!',
+        message: '🚀 Modo Produção Ativado! Histórico de visitas, relatórios de produtividade, números do BI e pedidos de teste foram zerados de forma definitiva. A equipe de promotoras (incluindo Anny) e a conexão do Bling foram salvas no Cloud Firestore com sucesso.',
         type: 'success'
       });
     } catch (e) {
-      console.error("Failed to clear test data", e);
+      console.error("Failed to reset production data", e);
     } finally {
-      setTimeout(() => setSyncNotice(null), 5000);
+      setSyncing(false);
+      setTimeout(() => setSyncNotice(null), 8000);
     }
   };
 
@@ -629,6 +806,56 @@ export default function App() {
       <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center text-white space-y-4">
         <Loader2 className="w-10 h-10 text-amber-500 animate-spin" />
         <p className="font-display font-medium text-sm text-gray-400">Iniciando Portal Comercial Safira Cosméticos...</p>
+      </div>
+    );
+  }
+
+  if (!activePromotora) {
+    return (
+      <div className="bg-[#0F0F10] min-h-screen text-[#E0E0E0] font-sans flex flex-col justify-between">
+        <Navbar 
+          activeTab={activeTab} 
+          setActiveTab={setActiveTab} 
+          isStandaloneMode={isStandaloneMode} 
+          activeUser={null}
+          promotoras={promotoras}
+          onSelectUser={handleSelectUser}
+          onOpenAuthModal={() => setShowAuthModal(true)}
+          onLogout={handleLogout}
+          authUser={authUser}
+        />
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+          <div className="bg-[#161618] border border-white/10 rounded-3xl p-8 max-w-md w-full space-y-6 shadow-2xl">
+            <div className="w-16 h-16 bg-amber-500 rounded-2xl flex items-center justify-center font-bold text-gray-950 font-display text-2xl mx-auto shadow-lg shadow-amber-500/20">
+              S
+            </div>
+            <div>
+              <h2 className="text-xl font-bold font-display text-white">Sessão Encerrada</h2>
+              <p className="text-xs text-gray-400 mt-1">Você saiu do Portal Comercial Safira Cosméticos. Faça login para acessar suas rotas e check-ins.</p>
+            </div>
+            <button
+              onClick={() => setShowAuthModal(true)}
+              className="w-full bg-amber-500 hover:bg-amber-400 text-gray-950 font-extrabold px-6 py-3 rounded-xl transition-all shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 cursor-pointer text-sm"
+            >
+              <LogIn className="w-4 h-4" />
+              <span>Fazer Login / Entrar no Sistema</span>
+            </button>
+          </div>
+        </div>
+
+        <AuthModal
+          isOpen={showAuthModal}
+          onClose={() => {
+            if (!activePromotora && promotoras.length > 0) {
+              setActivePromotora(promotoras[0]);
+            }
+            setShowAuthModal(false);
+          }}
+          authUser={authUser}
+          activePromotora={activePromotora}
+          promotoras={promotoras}
+          onSelectUser={handleSelectUser}
+        />
       </div>
     );
   }
@@ -643,8 +870,15 @@ export default function App() {
         promotoras={promotoras}
         onSelectUser={handleSelectUser}
         onOpenAuthModal={() => setShowAuthModal(true)}
+        onLogout={handleLogout}
         authUser={authUser}
+        notificacoes={notificacoes}
+        onMarkNotificacaoRead={handleMarkNotificacaoRead}
+        onClearAllNotificacoes={handleClearAllNotificacoes}
       />
+
+      {/* Offline Support Status Banner */}
+      <OfflineStatusBanner />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
         {/* BANNER DE NOTIFICAÇÃO DE SINCRONISMO */}
@@ -682,7 +916,7 @@ export default function App() {
             visitas={visitas}
             escalas={escalas}
             atestados={atestados}
-            activePromotora={activePromotora || promotoras[0]}
+            activePromotora={activePromotora}
             setActivePromotora={setActivePromotora}
             onAddPromotora={handleAddPromotora}
             onDeletePromotora={handleDeletePromotora}
@@ -697,6 +931,9 @@ export default function App() {
             setIsStandaloneMode={setIsStandaloneMode}
             onSyncBling={handleTriggerBlingSync}
             syncing={syncing}
+            onLogout={handleLogout}
+            notificacoes={notificacoes}
+            onMarkNotificacaoRead={handleMarkNotificacaoRead}
           />
         )}
 

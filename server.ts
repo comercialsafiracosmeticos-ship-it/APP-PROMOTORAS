@@ -89,320 +89,29 @@ const initialPromotoras = [
     status: 'Ativa',
     avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150',
     role: 'Admin'
+  },
+  {
+    id: 'prom-05',
+    nome: 'Anny',
+    codigoBling: 'PROM07',
+    telefone: '(27) 99999-8888',
+    email: 'anny.promotora@safira.com.br',
+    usuario: 'anny',
+    senha: 'safira123',
+    status: 'Ativa',
+    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+    role: 'Promotora'
   }
 ];
 
-const initialClientes = [
-  {
-    id: 'cli-01',
-    nome: 'FarmaVida - Centro',
-    cnpj: '12.345.678/0001-90',
-    cidade: 'Vitória',
-    endereco: 'Av. Jerônimo Monteiro, 450 - Centro, Vitória - ES',
-    telefone: '(27) 3222-1111',
-    produtosComprados: [
-      'Reparador De Pontas Amend 60Mi',
-      'Filtro Solar Cabelos Tingidos Amend 180G',
-      'Mascara Brilho Com Vitamina E Amend 500G'
-    ],
-    faturamentoTotal: 12500
-  },
-  {
-    id: 'cli-02',
-    nome: 'Shopping dos Cosméticos - Vila Velha',
-    cnpj: '23.456.789/0001-01',
-    cidade: 'Vila Velha',
-    endereco: 'Rua Henrique Moscoso, 820 - Centro, Vila Velha - ES',
-    telefone: '(27) 3329-2222',
-    produtosComprados: [
-      'Mascara Revitalizante D\'Pantenol Amend 500G',
-      'Mascara Matizadora Amend Peal Blonde 250G',
-      'Reparador De Pontas Amend 60Mi'
-    ],
-    faturamentoTotal: 8400
-  },
-  {
-    id: 'cli-03',
-    nome: 'Fórmula & Cia - Serra',
-    cnpj: '34.567.890/0001-12',
-    cidade: 'Serra',
-    endereco: 'Av. Central, 1200 - Laranjeiras, Serra - ES',
-    telefone: '(27) 3241-3333',
-    produtosComprados: [
-      'Filtro Solar Cabelos Tingidos Amend 180G',
-      'Mascara Brilho Com Vitamina E Amend 500G'
-    ],
-    faturamentoTotal: 5200
-  },
-  {
-    id: 'cli-04',
-    nome: 'Boutique Safira Beleza - Cariacica',
-    cnpj: '45.678.901/0001-23',
-    cidade: 'Cariacica',
-    endereco: 'Av. Expedito Garcia, 350 - Campo Grande, Cariacica - ES',
-    telefone: '(27) 3343-4444',
-    produtosComprados: [
-      'Reparador De Pontas Amend 60Mi',
-      'Filtro Solar Cabelos Tingidos Amend 180G',
-      'Mascara Brilho Com Vitamina E Amend 500G',
-      'Mascara Revitalizante D\'Pantenol Amend 500G',
-      'Mascara Matizadora Amend Peal Blonde 250G'
-    ],
-    faturamentoTotal: 18900
-  }
-];
-
-const initialProdutos = [
-  {
-    id: 'prod-01',
-    nome: 'Reparador De Pontas Amend 60Mi',
-    sku: '103-1',
-    ean: '7896852626788',
-    precoSugerido: 43.89,
-    categoria: 'Finalizadores'
-  },
-  {
-    id: 'prod-02',
-    nome: 'Filtro Solar Cabelos Tingidos Amend 180G',
-    sku: '108-1',
-    ean: '7896852610114',
-    precoSugerido: 26.99,
-    categoria: 'Tratamento'
-  },
-  {
-    id: 'prod-03',
-    nome: 'Mascara Brilho Com Vitamina E Amend 500G',
-    sku: '603-1',
-    ean: '7896852610770',
-    precoSugerido: 31.15,
-    categoria: 'Máscaras'
-  },
-  {
-    id: 'prod-04',
-    nome: 'Mascara Revitalizante D\'Pantenol Amend 500G',
-    sku: '605-1',
-    ean: '7896852610756',
-    precoSugerido: 32.05,
-    categoria: 'Máscaras'
-  },
-  {
-    id: 'prod-05',
-    nome: 'Mascara Matizadora Amend Peal Blonde 250G',
-    sku: '1272-1',
-    ean: '7896852619438',
-    precoSugerido: 42.99,
-    categoria: 'Matizadores'
-  }
-];
-
-const initialPedidos = [
-  {
-    id: 'ped-01',
-    numero: '10458',
-    clienteId: 'cli-01',
-    clienteNome: 'FarmaVida - Centro',
-    data: '2026-07-21',
-    valor: 2344.55,
-    status: 'Faturado',
-    vendedor: 'Jaqueline Vechi (Promotora)',
-    condicaoPagamento: '28 Dias - Boleto Bancário',
-    observacoes: 'Pedido faturado no Bling ERP e despachado via Transportadora Safira Express',
-    itens: [
-      { sku: '103-1', produtoNome: 'Reparador De Pontas Amend 60Mi', qtd: 30, preco: 43.89 },
-      { sku: '603-1', produtoNome: 'Mascara Brilho Com Vitamina E Amend 500G', qtd: 20, preco: 31.15 },
-      { sku: '108-1', produtoNome: 'Filtro Solar Cabelos Tingidos Amend 180G', qtd: 15, preco: 26.99 }
-    ]
-  },
-  {
-    id: 'ped-02',
-    numero: '10457',
-    clienteId: 'cli-02',
-    clienteNome: 'Shopping dos Cosméticos - Vila Velha',
-    data: '2026-07-19',
-    valor: 1733.10,
-    status: 'Faturado',
-    vendedor: 'Daniela Alves de Almeida',
-    condicaoPagamento: '30/60 Dias - Boleto',
-    observacoes: 'Entrega direta no estoque central da loja do Shopping',
-    itens: [
-      { sku: '1272-1', produtoNome: 'Mascara Matizadora Amend Peal Blonde 250G', qtd: 25, preco: 42.99 },
-      { sku: '103-1', produtoNome: 'Reparador De Pontas Amend 60Mi', qtd: 15, preco: 43.89 }
-    ]
-  },
-  {
-    id: 'ped-03',
-    numero: '10456',
-    clienteId: 'cli-04',
-    clienteNome: 'Boutique Safira Beleza - Cariacica',
-    data: '2026-07-15',
-    valor: 2311.00,
-    status: 'Atendido',
-    vendedor: 'Vanessa Vicente',
-    condicaoPagamento: 'À Vista - PIX Safira',
-    observacoes: 'Acompanhar reposição das ampolas e amaciantes de pontas',
-    itens: [
-      { sku: '108-1', produtoNome: 'Filtro Solar Cabelos Tingidos Amend 180G', qtd: 50, preco: 26.99 },
-      { sku: '605-1', produtoNome: 'Mascara Revitalizante D\'Pantenol Amend 500G', qtd: 30, preco: 32.05 }
-    ]
-  },
-  {
-    id: 'ped-04',
-    numero: '10455',
-    clienteId: 'cli-03',
-    clienteNome: 'Fórmula & Cia - Serra',
-    data: '2026-07-10',
-    valor: 2105.80,
-    status: 'Faturado',
-    vendedor: 'Jaqueline Vechi (Promotora)',
-    condicaoPagamento: '30 Dias - Faturamento Direto',
-    observacoes: 'Reposicao de produtos com alto giro na gôndola de entrada',
-    itens: [
-      { sku: '603-1', produtoNome: 'Mascara Brilho Com Vitamina E Amend 500G', qtd: 40, preco: 31.15 },
-      { sku: '1272-1', produtoNome: 'Mascara Matizadora Amend Peal Blonde 250G', qtd: 20, preco: 42.99 }
-    ]
-  }
-];
-
-const initialVisitas = [
-  {
-    id: 'vis-01',
-    promotoraId: 'prom-01',
-    promotoraNome: 'Jaqueline Vechi',
-    clienteId: 'cli-01',
-    clienteNome: 'FarmaVida - Centro',
-    data: '2026-07-21',
-    status: 'concluida',
-    entrada: '2026-07-21T08:00:00Z',
-    saida: '2026-07-21T09:30:00Z',
-    gpsEntrada: { lat: -20.3155, lng: -40.3121, accuracy: 12 },
-    gpsSaida: { lat: -20.3156, lng: -40.3123, accuracy: 15 },
-    fotoDisplay: 'https://images.unsplash.com/photo-1513542789411-b6a5d4f31634?w=400',
-    fotoFachada: 'https://images.unsplash.com/photo-1580910051074-3eb694886505?w=400',
-    comentarios: 'Abastecimento realizado de ampolas e kit Specialist Blonde. Gôndola limpa e organizada. Realce acobreado e matizador em destaque na ponta de gôndola.',
-    pecasVendidas: 4,
-    auditoriaGondola: [
-      { produtoId: 'prod-01', sku: '103-1', nome: 'Reparador De Pontas Amend 60Mi', temEstoque: true, noDisplay: true, precoPraticado: 43.89, qtdGondola: 15 },
-      { produtoId: 'prod-02', sku: '108-1', nome: 'Filtro Solar Cabelos Tingidos Amend 180G', temEstoque: true, noDisplay: true, precoPraticado: 26.99, qtdGondola: 8 },
-      { produtoId: 'prod-03', sku: '603-1', nome: 'Mascara Brilho Com Vitamina E Amend 500G', temEstoque: true, noDisplay: true, precoPraticado: 31.15, qtdGondola: 4 }
-    ],
-    produtosVencer: [
-      { produtoNome: 'Reparador De Pontas Amend 60Mi', qtd: 3, vencimento: '2026-12-15' }
-    ],
-    analiseConcorrencia: [
-      { marca: 'L\'Oréal Professionnel / Wella', precoConcorrente: 148.00, observacoes: 'Marca concorrente saindo a R$ 148,00 na mesma prateleira.' }
-    ]
-  }
-];
-
-const initialEscalas = [
-  {
-    id: 'esc-01',
-    promotoraId: 'prom-01',
-    promotoraNome: 'Jaqueline Vechi',
-    clienteId: 'cli-01',
-    clienteNome: 'FarmaVida - Centro',
-    data: '2026-07-21',
-    horaInicio: '08:00',
-    horaFim: '12:00',
-    observacoes: 'Abastecimento, foco em matizadores'
-  },
-  {
-    id: 'esc-02',
-    promotoraId: 'prom-01',
-    promotoraNome: 'Jaqueline Vechi',
-    clienteId: 'cli-02',
-    clienteNome: 'Shopping dos Cosméticos - Vila Velha',
-    data: '2026-07-22',
-    horaInicio: '09:00',
-    horaFim: '13:00',
-    observacoes: 'Auditoria de pontas de gôndola e novas compras'
-  },
-  {
-    id: 'esc-03',
-    promotoraId: 'prom-02',
-    promotoraNome: 'Daniela Alves de Almeida',
-    clienteId: 'cli-03',
-    clienteNome: 'Fórmula & Cia - Serra',
-    data: '2026-07-21',
-    horaInicio: '08:00',
-    horaFim: '12:00',
-    observacoes: 'Verificação de produtos próximos ao vencimento'
-  }
-];
-
-const initialAtestados = [] as any[];
-
-const initialMetasVendas = [
-  { id: 'meta-01', promotoraId: 'prom-01', promotoraNome: 'Jaqueline Vechi', mesAno: '2026-07', metaValor: 5000 },
-  { id: 'meta-02', promotoraId: 'prom-02', promotoraNome: 'Daniela Alves de Almeida', mesAno: '2026-07', metaValor: 3500 },
-  { id: 'meta-03', promotoraId: 'prom-03', promotoraNome: 'Vanessa Vicente', mesAno: '2026-07', metaValor: 3000 },
-  { id: 'meta-04', promotoraId: 'prom-04', promotoraNome: 'Safira Cosméticos Admin', mesAno: '2026-07', metaValor: 4000 }
-];
-
-const initialSyncLogs = [
-  {
-    id: 'log-001',
-    dataHora: '2026-07-22T11:45:10.000Z',
-    tipo: 'Manual',
-    status: 'Sucesso',
-    mensagem: 'Sincronização manual executada pelo Administrador. Todos os registros processados sem inconsistências.',
-    clientesImportados: 4,
-    pedidosImportados: 5,
-    produtosSincronizados: 12,
-    tempoExecucaoMs: 1240,
-    endpointApi: 'https://api.bling.com.br/v3/pedidos/vendas',
-    detalhesErros: [],
-    ipOrigem: '189.26.112.4'
-  },
-  {
-    id: 'log-002',
-    dataHora: '2026-07-22T08:15:33.000Z',
-    tipo: 'Webhook',
-    status: 'Sucesso',
-    mensagem: 'Atualização de estoque recebida via Webhook do Bling ERP para linha Amend.',
-    clientesImportados: 0,
-    pedidosImportados: 1,
-    produtosSincronizados: 4,
-    tempoExecucaoMs: 450,
-    endpointApi: '/api/bling/webhook',
-    detalhesErros: [],
-    ipOrigem: '54.233.109.12 (Bling Server)'
-  },
-  {
-    id: 'log-003',
-    dataHora: '2026-07-21T18:30:00.000Z',
-    tipo: 'Agendado',
-    status: 'Alerta',
-    mensagem: 'Sincronização noturna concluída com avisos de formatação em 1 cliente com CNPJ pendente.',
-    clientesImportados: 1,
-    pedidosImportados: 2,
-    produtosSincronizados: 8,
-    tempoExecucaoMs: 2890,
-    endpointApi: 'https://api.bling.com.br/v3/contatos',
-    detalhesErros: [
-      'Aviso: Cliente ID 88392 (FarmaVida) possui CNPJ formatado sem pontuação no ERP. Ajustado automaticamente.',
-      'Aviso: Produto SKU 108-1 com divergência mínima de R$ 0,05 na alíquota ST.'
-    ],
-    ipOrigem: 'Sistema Automatizado Safira'
-  },
-  {
-    id: 'log-004',
-    dataHora: '2026-07-20T14:12:05.000Z',
-    tipo: 'Manual',
-    status: 'Erro',
-    mensagem: 'Falha temporária de autenticação ao tentar conectar com a chave API anterior.',
-    clientesImportados: 0,
-    pedidosImportados: 0,
-    produtosSincronizados: 0,
-    tempoExecucaoMs: 5120,
-    endpointApi: 'https://api.bling.com.br/v3/pedidos/vendas',
-    detalhesErros: [
-      'HTTP 401 Unauthorized: Token de acesso do Bling ERP expirado ou revogado.',
-      'Retentativa 1/3 falhou: Invalid bearer authentication header token.'
-    ],
-    ipOrigem: '189.26.112.4'
-  }
-];
+const initialClientes: any[] = [];
+const initialProdutos: any[] = [];
+const initialPedidos: any[] = [];
+const initialVisitas: any[] = [];
+const initialEscalas: any[] = [];
+const initialAtestados: any[] = [];
+const initialMetasVendas: any[] = [];
+const initialSyncLogs: any[] = [];
 
 const initialBlingConfig = {
   apiKey: '',
@@ -433,8 +142,19 @@ const defaultStore = {
 async function syncCollectionToFirestore(collectionName: string, items: any[]) {
   if (!db) return;
   try {
+    // 1. Delete documents from Firestore that are no longer in items
+    const snap = await getDocs(collection(db, collectionName));
+    const currentIds = new Set((items || []).map(i => String(i.id)));
+    for (const d of snap.docs) {
+      if (!currentIds.has(d.id)) {
+        await deleteDoc(doc(db, collectionName, d.id));
+        console.log(`🔥 Item ${d.id} excluído da coleção ${collectionName} no Firestore.`);
+      }
+    }
+
+    // 2. Upsert existing/new items
     for (const item of items) {
-      if (item.id) {
+      if (item && item.id) {
         await setDoc(doc(db, collectionName, String(item.id)), item, { merge: true });
       }
     }
@@ -517,12 +237,13 @@ async function loadFromFirestore() {
 
     return {
       promotoras: promotoras.length > 0 ? promotoras : (diskData?.promotoras || defaultStore.promotoras),
-      clientes: clientes.length > 0 ? clientes : (diskData?.clientes || defaultStore.clientes),
-      produtos: produtos.length > 0 ? produtos : (diskData?.produtos || defaultStore.produtos),
-      pedidos: pedidos.length > 0 ? pedidos : (diskData?.pedidos || defaultStore.pedidos),
-      visitas: visitas.length > 0 ? visitas : (diskData?.visitas || defaultStore.visitas),
-      escalas: escalas.length > 0 ? escalas : (diskData?.escalas || defaultStore.escalas),
-      atestados: atestados.length > 0 ? atestados : (diskData?.atestados || defaultStore.atestados),
+      clientes: diskData?.clientes !== undefined ? diskData.clientes : clientes,
+      produtos: diskData?.produtos !== undefined ? diskData.produtos : produtos,
+      pedidos: diskData?.pedidos !== undefined ? diskData.pedidos : pedidos,
+      visitas: diskData?.visitas !== undefined ? diskData.visitas : visitas,
+      escalas: diskData?.escalas !== undefined ? diskData.escalas : escalas,
+      atestados: diskData?.atestados !== undefined ? diskData.atestados : atestados,
+      metasVendas: diskData?.metasVendas !== undefined ? diskData.metasVendas : [],
       blingConfig: mergedBlingConfig
     } as any;
   } catch (e) {
@@ -1262,6 +983,47 @@ app.post('/api/bling/clear-test-data', (req, res) => {
   });
 });
 
+// Endpoint to activate clean production mode by resetting test metrics, visits, and orders while preserving official team and Bling config
+app.post('/api/admin/reset-production', (req, res) => {
+  const store = loadData();
+  
+  // Ensure Anny is registered in official team
+  if (!store.promotoras) store.promotoras = [];
+  const existingAnny = store.promotoras.find((p: any) => p.nome?.toLowerCase().includes('anny'));
+  if (!existingAnny) {
+    store.promotoras.push({
+      id: 'prom-05',
+      nome: 'Anny',
+      codigoBling: 'PROM07',
+      telefone: '(27) 99999-8888',
+      email: 'anny.promotora@safira.com.br',
+      usuario: 'anny',
+      senha: 'safira123',
+      status: 'Ativa',
+      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+      role: 'Promotora'
+    });
+  }
+
+  // Zero out all test simulation data for production start
+  store.visitas = [];
+  store.escalas = [];
+  store.atestados = [];
+  store.metasVendas = [];
+  store.pedidos = [];
+  store.clientes = [];
+  if (store.blingConfig) {
+    store.blingConfig.logsSincronizacao = [];
+  }
+
+  saveData(store);
+  res.json({
+    success: true,
+    message: "Modo Produção ativado! Dados fictícios zerados, equipe oficial e credenciais Bling mantidas de forma definitiva.",
+    store
+  });
+});
+
 // Save bling config
 app.post('/api/bling/config', (req, res) => {
   const store = loadData();
@@ -1365,8 +1127,14 @@ app.post('/api/chat', async (req, res) => {
   const pedidosCount = store.pedidos?.length || 0;
 
   const systemInstruction = `
-Você é a Assistente Safira Inteligência Artificial, especialista em políticas de fornecimento, regras, prazos, faturamento e lançamentos da Safira Cosméticos e da marca de produtos Amend no Ponto de Venda (PDV).
-Seu público principal são Promotoras de Vendas, Representantes Comercias e Gestores que utilizam o portal de campo.
+Você é a Assistente Safira Inteligência Artificial, especialista EXCLUSIVA em políticas comerciais, processos internos, regras de fornecimento, prazos, faturamento e lançamentos de produtos da Safira Cosméticos e da marca Amend no Ponto de Venda (PDV).
+
+Seu público principal são Promotoras de Vendas, Representantes Comerciais e Gestores que utilizam o portal de campo da Safira Cosméticos.
+
+DIRETRIZES RÍGIDAS DE ESCOPO E BASE DE CONHECIMENTO:
+1. FOCO EXCLUSIVO SAFIRA COSMÉTICOS: Responda APENAS sobre processos internos, políticas comerciais, prazos de entrega, faturamento, trocas e avarias, catálogo de produtos Amend/Safira e rotinas de campo (check-in, geolocalização, controle de validade e pedidos).
+2. REMOÇÃO DE TEMAS ESTRANHOS / EXTERNOS: Todas as informações e respostas sobre regularização imobiliária, engenharia, viabilidade empresarial, licenças urbanísticas ou consultoria de imóveis estão STRICTAMENTE REMOVIDAS E PROIBIDAS.
+3. RECUSA EDUCADA PARA TEMAS FORA DO ESCOPO: Se o usuário perguntar sobre regularização imobiliária, viabilidade empresarial ou qualquer assunto alheio aos processos e produtos da Safira Cosméticos, informe educadamente que sua base de conhecimento é restrita exclusivamente às operações e políticas comerciais da Safira Cosméticos.
 
 Regras, Políticas e Diretrizes Comerciais da Safira Cosméticos / Amend:
 1. Prazos de Entrega: Na Grande Vitória (Serra, Vitória, Vila Velha e Cariacica), a entrega ocorre entre 24 a 48 horas úteis após o faturamento. Para o interior do estado do Espírito Santo, o prazo é de 3 a 5 dias úteis.
@@ -1393,6 +1161,10 @@ Sempre responda de maneira altamente prestativa, profissional e em português br
   // Fallback response generator in case AI model key is missing or encounters a runtime error
   const generateFallbackResponse = (msgText: string) => {
     const msgLower = (msgText || '').toLowerCase();
+
+    if (msgLower.includes('imobil') || msgLower.includes('regulariz') || msgLower.includes('viabilidad') || msgLower.includes('empresarial')) {
+      return "• **Escopo Restrito:** Sou a assistente focada exclusivamente nos **processos internos e políticas comerciais da Safira Cosméticos**. Não forneço informações sobre regularização imobiliária ou viabilidade empresarial. Como posso te ajudar em relação a pedidos, prazos ou rotinas da Safira?";
+    }
     
     if (msgLower.includes('pedido') || msgLower.includes('mínimo') || msgLower.includes('minimo')) {
       return "• **Pedido Mínimo:** O valor mínimo para faturamento de representantes e PDVs é de **R$ 600,00 líquidos** (faturamento via Bling ERP).";
@@ -1415,7 +1187,7 @@ Sempre responda de maneira altamente prestativa, profissional e em português br
     if (msgLower.includes('cliente') || msgLower.includes('pdv') || msgLower.includes('cadastr') || msgLower.includes('promotora')) {
       return `• **Informações da Base Atual em Tempo Real:**\n  - **Clientes/PDVs Integrados:** ${clientesCount} cadastrados\n  - **Catálogo de Produtos:** ${produtosCount} itens cadastrados\n  - **Equipe de Campo:** ${promotorasCount} promotoras ativas\n  - **Pedidos Faturados:** ${pedidosCount} pedidos registrados.`;
     }
-    return `Olá! Sou a **Assistente Safira Inteligência Artificial**, especialista no portal comercial e produtos Amend / Safira Cosméticos.\n\n• **Pedido Mínimo:** R$ 600,00 líquidos.\n• **Prazos de Entrega:** Grande Vitória (24h a 48h) | Interior do ES (3 a 5 dias úteis).\n• **Base Integrada:** Atualmente temos **${clientesCount} clientes/PDVs** e **${produtosCount} produtos** cadastrados.\n\nComo posso te ajudar hoje sobre produtos, prazos ou rotinas de campo?`;
+    return `Olá! Sou a **Assistente Safira Inteligência Artificial**, especialista no portal comercial e produtos Amend / Safira Cosméticos.\n\n• **Pedido Mínimo:** R$ 600,00 líquidos.\n• **Prazos de Entrega:** Grande Vitória (24h a 48h) | Interior do ES (3 a 5 dias úteis).\n• **Base Integrada:** Atualmente temos **${clientesCount} clientes/PDVs** e **${produtosCount} produtos** cadastrados.\n\nComo posso te ajudar hoje sobre produtos, prazos ou rotinas de campo da Safira Cosméticos?`;
   };
 
   if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') {

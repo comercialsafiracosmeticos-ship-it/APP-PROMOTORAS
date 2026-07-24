@@ -12,20 +12,35 @@ import {
 } from 'firebase/auth';
 import { 
   getFirestore, 
+  enableIndexedDbPersistence,
   doc, 
   setDoc, 
-  updateDoc, 
+  updateDoc,
+  deleteDoc,
   getDocFromServer,
   collection,
   getDocs
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
-import { Visita, BlingConfig } from '../types';
+import { Visita, BlingConfig, Promotora } from '../types';
+import { queueOfflineVisita } from './offlineManager';
 
 // Initialize Firebase
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+
+// Enable IndexedDB offline persistence for Firestore
+if (typeof window !== 'undefined') {
+  enableIndexedDbPersistence(db).catch((err) => {
+    if (err.code === 'failed-precondition') {
+      console.warn('Persistência do Firestore desativada: Múltiplas abas simultâneas.');
+    } else if (err.code === 'unimplemented') {
+      console.warn('Navegador atual não suporta IndexedDB do Firestore.');
+    }
+  });
+}
+
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
@@ -88,6 +103,8 @@ export async function saveVisitaToFirestore(visita: Visita) {
     }, { merge: true });
     console.log(`Visita ${visita.id} salva com sucesso no Firestore.`);
   } catch (err) {
+    console.warn(`Dispositivo sem internet ou erro no Firestore. Salvando visita ${visita.id} na fila offline local.`);
+    queueOfflineVisita(visita);
     handleFirestoreError(err, OperationType.WRITE, docPath);
   }
 }
@@ -132,6 +149,57 @@ export async function getBlingConfigFromFirestore(): Promise<BlingConfig | null>
   } catch (err) {
     handleFirestoreError(err, OperationType.GET, docPath);
     return null;
+  }
+}
+
+export async function savePromotoraToFirestore(promotora: Promotora) {
+  const docPath = `promotoras/${promotora.id}`;
+  try {
+    const docRef = doc(db, 'promotoras', promotora.id);
+    await setDoc(docRef, {
+      ...promotora,
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+    console.log(`Promotora ${promotora.nome} (${promotora.id}) salva no Firestore.`);
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, docPath);
+  }
+}
+
+export async function updatePromotoraInFirestore(id: string, updatedData: Partial<Promotora>) {
+  const docPath = `promotoras/${id}`;
+  try {
+    const docRef = doc(db, 'promotoras', id);
+    await setDoc(docRef, {
+      ...updatedData,
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+    console.log(`Promotora ${id} atualizada no Firestore.`);
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, docPath);
+  }
+}
+
+export async function deletePromotoraFromFirestore(id: string) {
+  const docPath = `promotoras/${id}`;
+  try {
+    const docRef = doc(db, 'promotoras', id);
+    await deleteDoc(docRef);
+    console.log(`Promotora ${id} removida do Firestore.`);
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, docPath);
+  }
+}
+
+export async function getPromotorasFromFirestore(): Promise<Promotora[]> {
+  const docPath = `promotoras`;
+  try {
+    const colRef = collection(db, 'promotoras');
+    const snap = await getDocs(colRef);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }) as Promotora);
+  } catch (err) {
+    handleFirestoreError(err, OperationType.GET, docPath);
+    return [];
   }
 }
 

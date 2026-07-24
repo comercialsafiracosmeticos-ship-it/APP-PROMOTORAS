@@ -5,12 +5,14 @@ import {
   FileText, TrendingUp, Settings, Plus, Trash2, Edit2, 
   Upload, Sparkles, User, AlertOctagon, Info, Eye, ArrowRight,
   Bell, Lock, Unlock, Compass, RefreshCw, UserCheck, Store, Phone,
-  Key, Copy, Send, LogIn, Share2, Shield, Maximize2, Image as ImageIcon
+  Key, Copy, Send, LogIn, LogOut, Share2, Shield, Maximize2, Image as ImageIcon, Check
 } from 'lucide-react';
 import { 
-  Promotora, Cliente, Visita, Escala, Atestado, Produto, AuditoriaItem, ProdutoVencer, AnaliseConcorrente 
+  Promotora, Cliente, Visita, Escala, Atestado, Produto, AuditoriaItem, ProdutoVencer, AnaliseConcorrente, NotificacaoMeta 
 } from '../types';
 import AISafiraAssistant from './AISafiraAssistant';
+import AtestadosRHExportModal from './AtestadosRHExportModal';
+import CheckInCheckOutAlertModal from './CheckInCheckOutAlertModal';
 
 interface PromotoraConsoleProps {
   promotoras: Promotora[];
@@ -34,6 +36,9 @@ interface PromotoraConsoleProps {
   setIsStandaloneMode: (mode: boolean) => void;
   onSyncBling?: () => void;
   syncing?: boolean;
+  onLogout?: () => void;
+  notificacoes?: NotificacaoMeta[];
+  onMarkNotificacaoRead?: (id: string) => void;
 }
 
 export default function PromotoraConsole({
@@ -57,9 +62,16 @@ export default function PromotoraConsole({
   isStandaloneMode,
   setIsStandaloneMode,
   onSyncBling,
-  syncing
+  syncing,
+  onLogout,
+  notificacoes = [],
+  onMarkNotificacaoRead
 }: PromotoraConsoleProps) {
   const [activeSubTab, setActiveSubTab] = useState<'checkin' | 'historico' | 'equipe' | 'escalas' | 'atestados' | 'produtividade' | 'config'>('checkin');
+  const [showRhExportModal, setShowRhExportModal] = useState<boolean>(false);
+
+  const unreadGoalNotifs = notificacoes.filter(n => !n.lida && n.promotoraId === activePromotora.id && n.tipo === 'meta');
+
 
   // Safeguard: Ensure non-admin users cannot stay in restricted subtabs ('equipe' and 'config')
   useEffect(() => {
@@ -281,6 +293,115 @@ export default function PromotoraConsole({
   const [reportViewMode, setReportViewMode] = useState<'auditoria' | 'presenca' | 'vendas'>('auditoria');
   const [salesGroupBy, setSalesGroupBy] = useState<'promotora' | 'pdv' | 'periodo'>('promotora');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // --- CHECK-IN / CHECK-OUT OVERDUE SHIFT ALERT SYSTEM ---
+  const [pontoAlertOpen, setPontoAlertOpen] = useState<boolean>(false);
+  const [pontoAlertType, setPontoAlertType] = useState<'CHECKIN_LATE' | 'CHECKOUT_LATE' | null>(null);
+  const [pontoAlertOverdueMinutes, setPontoAlertOverdueMinutes] = useState<number>(0);
+  const [pontoAlertTargetEscala, setPontoAlertTargetEscala] = useState<Escala | null>(null);
+  const [pontoAlertSnoozedUntil, setPontoAlertSnoozedUntil] = useState<number | null>(null);
+  const [pontoAlertDismissedForSession, setPontoAlertDismissedForSession] = useState<boolean>(false);
+
+  // Automatic Ponto Overdue Detection (Interval check every 15s)
+  useEffect(() => {
+    const checkPontoOverdue = () => {
+      if (pontoAlertSnoozedUntil && Date.now() < pontoAlertSnoozedUntil) return;
+
+      const todayStr = new Date().toISOString().split('T')[0];
+      
+      let todayEscala = escalas.find(e => e.promotoraId === activePromotora.id && e.data === todayStr);
+
+      if (!todayEscala && escalas.length > 0) {
+        todayEscala = escalas.find(e => e.promotoraId === activePromotora.id) || escalas[0];
+      }
+
+      if (!todayEscala) return;
+
+      const now = new Date();
+
+      const todayVisit = visitas.find(v => 
+        v.promotoraId === activePromotora.id && 
+        v.data === todayStr
+      ) || activeVisita;
+
+      const hasEntrada = Boolean(todayVisit?.entrada || todayVisit?.pontoEntradaManha || todayVisit?.status === 'andamento' || todayVisit?.status === 'concluida');
+      const hasSaida = Boolean(todayVisit?.saida || todayVisit?.pontoSaidaTarde || todayVisit?.status === 'concluida');
+
+      const [startH, startM] = (todayEscala.horaInicio || '08:00').split(':').map(Number);
+      const [endH, endM] = (todayEscala.horaFim || '17:00').split(':').map(Number);
+
+      const shiftStart = new Date();
+      shiftStart.setHours(startH, startM, 0, 0);
+
+      const shiftEnd = new Date();
+      shiftEnd.setHours(endH, endM, 0, 0);
+
+      const minsAfterStart = Math.floor((now.getTime() - shiftStart.getTime()) / 60000);
+      const minsAfterEnd = Math.floor((now.getTime() - shiftEnd.getTime()) / 60000);
+
+      // Check-in overdue: 10+ minutes after shift start & no entry
+      if (!hasEntrada && minsAfterStart >= 10) {
+        setPontoAlertType('CHECKIN_LATE');
+        setPontoAlertOverdueMinutes(minsAfterStart);
+        setPontoAlertTargetEscala(todayEscala);
+        if (!pontoAlertOpen && !pontoAlertDismissedForSession) {
+          setPontoAlertOpen(true);
+        }
+        return;
+      }
+
+      // Check-out overdue: entrada done, no exit, and 10+ minutes after shift end
+      if (hasEntrada && !hasSaida && minsAfterEnd >= 10) {
+        setPontoAlertType('CHECKOUT_LATE');
+        setPontoAlertOverdueMinutes(minsAfterEnd);
+        setPontoAlertTargetEscala(todayEscala);
+        if (!pontoAlertOpen && !pontoAlertDismissedForSession) {
+          setPontoAlertOpen(true);
+        }
+        return;
+      }
+
+      if (hasEntrada && hasSaida) {
+        setPontoAlertOpen(false);
+        setPontoAlertType(null);
+      }
+    };
+
+    checkPontoOverdue();
+    const interval = setInterval(checkPontoOverdue, 15000);
+    return () => clearInterval(interval);
+  }, [escalas, visitas, activeVisita, activePromotora, pontoAlertSnoozedUntil, pontoAlertOpen, pontoAlertDismissedForSession]);
+
+  const handleSimulatePontoAlert = (type: 'CHECKIN_LATE' | 'CHECKOUT_LATE') => {
+    const targetCliente = clientes.find(c => c.id === selectedClienteId) || clientes[0];
+    const mockEscala: Escala = {
+      id: 'sim_escala_' + Date.now(),
+      promotoraId: activePromotora.id,
+      promotoraNome: activePromotora.nome,
+      clienteId: targetCliente?.id || '1',
+      clienteNome: targetCliente?.nome || 'PDV Safira Centro',
+      data: new Date().toISOString().split('T')[0],
+      horaInicio: type === 'CHECKIN_LATE' ? '08:00' : '08:00',
+      horaFim: type === 'CHECKOUT_LATE' ? '17:00' : '17:00'
+    };
+
+    if (!selectedClienteId && targetCliente) {
+      setSelectedClienteId(targetCliente.id);
+    }
+
+    setPontoAlertTargetEscala(mockEscala);
+    setPontoAlertType(type);
+    setPontoAlertOverdueMinutes(type === 'CHECKIN_LATE' ? 14 : 18);
+    setPontoAlertDismissedForSession(false);
+    setPontoAlertSnoozedUntil(null);
+    setPontoAlertOpen(true);
+
+    triggerPushAlert(
+      type === 'CHECKIN_LATE' ? '⏰ Alerta: Check-in Pendente (+14 min)' : '🏠 Alerta: Check-out Pendente (+18 min)',
+      'Simulador disparou o aviso de ponto em atraso com sucesso.',
+      'warning'
+    );
+  };
 
   useEffect(() => {
     if (toastMessage) {
@@ -1038,6 +1159,17 @@ export default function PromotoraConsole({
             Entrar c/ Senha
           </button>
 
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:border-rose-500/50 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+              title="Sair do sistema e encerrar sessão"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              Sair / Deslogar
+            </button>
+          )}
+
           <span className="text-[10px] font-bold text-white/40 uppercase tracking-wider hidden sm:inline">Perfil:</span>
           <select
             value={activePromotora.id}
@@ -1053,6 +1185,79 @@ export default function PromotoraConsole({
           </select>
         </div>
       </div>
+
+      {/* Alert Banner for Unread Sales Goals Notifications */}
+      {unreadGoalNotifs.length > 0 && (
+        <div className="space-y-2">
+          {unreadGoalNotifs.map((n) => (
+            <div 
+              key={n.id}
+              className="bg-gradient-to-r from-amber-500/20 via-amber-500/10 to-amber-500/20 border-2 border-amber-500/40 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xl animate-pulse"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500 flex items-center justify-center text-gray-950 font-bold shrink-0 shadow-md shadow-amber-500/20">
+                  <TrendingUp className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-black uppercase tracking-wider bg-amber-500 text-gray-950 px-2 py-0.5 rounded-full font-mono">
+                      Aviso de Meta
+                    </span>
+                    <h4 className="font-bold text-sm text-white">{n.titulo}</h4>
+                  </div>
+                  <p className="text-xs text-amber-200 mt-0.5 leading-relaxed">{n.mensagem}</p>
+                </div>
+              </div>
+
+              {onMarkNotificacaoRead && (
+                <button
+                  onClick={() => onMarkNotificacaoRead(n.id)}
+                  className="bg-amber-500 hover:bg-amber-400 text-gray-950 text-xs font-extrabold px-4 py-2 rounded-xl transition-all cursor-pointer shrink-0 shadow-md shadow-amber-500/20 flex items-center gap-1.5 self-end sm:self-auto"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Ciente / Entendido</span>
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Persistent Top Banner for Overdue Ponto (Check-in or Check-out) */}
+      {pontoAlertType && (
+        <div className="bg-gradient-to-r from-red-500/20 via-amber-500/20 to-red-500/20 border-2 border-amber-500/50 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xl animate-fade-in">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500 text-gray-950 font-black flex items-center justify-center shrink-0 shadow-md shadow-amber-500/20">
+              <Clock className="w-5 h-5 animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black uppercase tracking-wider bg-red-500 text-white px-2 py-0.5 rounded-full font-mono">
+                  Aviso de Pontualidade (+{pontoAlertOverdueMinutes} min)
+                </span>
+                <h4 className="font-bold text-sm text-white">
+                  {pontoAlertType === 'CHECKIN_LATE' ? 'Pendência de Check-in (Entrada)' : 'Pendência de Check-out (Saída)'}
+                </h4>
+              </div>
+              <p className="text-xs text-amber-200 mt-0.5 leading-relaxed">
+                {pontoAlertType === 'CHECKIN_LATE'
+                  ? `Sua escala previa entrada às ${pontoAlertTargetEscala?.horaInicio || '08:00'}. Já se passaram +${pontoAlertOverdueMinutes} minutos sem registro.`
+                  : `Sua escala previa saída às ${pontoAlertTargetEscala?.horaFim || '17:00'}. Já se passaram +${pontoAlertOverdueMinutes} minutos sem registrar o término.`}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+            <button
+              onClick={() => setPontoAlertOpen(true)}
+              className="flex-1 sm:flex-initial bg-amber-500 hover:bg-amber-400 text-gray-950 text-xs font-extrabold px-4 py-2 rounded-xl transition-all cursor-pointer shadow-md shadow-amber-500/20 flex items-center justify-center gap-1.5"
+            >
+              <Clock className="w-4 h-4" />
+              <span>{pontoAlertType === 'CHECKIN_LATE' ? 'Bater Ponto Agora' : 'Registrar Saída'}</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Promotoras Sub-navigation Tab bar */}
       <div className="flex flex-wrap bg-[#1C1C1F]/50 p-1.5 rounded-2xl gap-1 border border-white/10">
@@ -1150,6 +1355,70 @@ export default function PromotoraConsole({
           {/* Coluna da Esquerda (Identificação + Controle de Presença) */}
           <div className="lg:col-span-8 space-y-6">
             
+            {/* CARD DE CONTROLE DE PONTUALIDADE & PUSH NOTIFICATIONS */}
+            <div className="bg-gradient-to-r from-[#18181C] via-[#222227] to-[#18181C] rounded-2xl border border-amber-500/30 p-5 space-y-4 shadow-xl">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 font-bold shrink-0">
+                    <Clock className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-mono">
+                        Notificação Push & Alerta de Escala
+                      </span>
+                      <h3 className="font-display font-bold text-sm text-white">Monitoramento Automático de Pontualidade (+10 min)</h3>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      O aplicativo dispara um modal de aviso e notificação push caso ultrapasse 10 minutos do horário de Check-in ou Check-out previsto na escala.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Status Indicator Badge */}
+                <div className="flex items-center gap-2 self-end sm:self-center">
+                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold border ${
+                    pontoAlertType
+                      ? 'bg-red-500/20 text-red-300 border-red-500/40 animate-pulse'
+                      : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                  }`}>
+                    <span className={`w-2 h-2 rounded-full ${pontoAlertType ? 'bg-red-500 animate-ping' : 'bg-emerald-400'}`} />
+                    {pontoAlertType ? `Pendente (+${pontoAlertOverdueMinutes} min)` : 'Ponto em Dia'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Simulation Controls */}
+              <div className="flex flex-wrap items-center justify-between gap-3 text-xs bg-[#151518] p-3 rounded-xl border border-white/5">
+                <div className="flex items-center gap-2 text-gray-400">
+                  <Bell className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span>Testar simulador de alerta de atraso (+10 min):</span>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleSimulatePontoAlert('CHECKIN_LATE')}
+                    className="bg-[#26262B] hover:bg-amber-500/20 text-amber-300 hover:text-amber-200 border border-amber-500/30 font-bold px-3 py-1.5 rounded-lg text-xs transition-all cursor-pointer flex items-center gap-1.5"
+                    title="Simular disparo do modal de Check-in atrasado"
+                  >
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>Simular Check-in (+14 min)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleSimulatePontoAlert('CHECKOUT_LATE')}
+                    className="bg-[#26262B] hover:bg-blue-500/20 text-blue-300 hover:text-blue-200 border border-blue-500/30 font-bold px-3 py-1.5 rounded-lg text-xs transition-all cursor-pointer flex items-center gap-1.5"
+                    title="Simular disparo do modal de Check-out atrasado"
+                  >
+                    <Shield className="w-3.5 h-3.5" />
+                    <span>Simular Check-out (+18 min)</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
             {/* 1. IDENTIFICAÇÃO DO PONTO DE VENDA */}
             <div className="bg-[#161618] rounded-2xl border border-white/10 p-6 space-y-5 shadow-lg">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -2870,6 +3139,35 @@ export default function PromotoraConsole({
       {/* SUB TAB: ATESTADOS E DOCUMENTOS */}
       {activeSubTab === 'atestados' && (
         <div className="space-y-6">
+          {/* Header Banner for RH PDF Export */}
+          <div className="bg-gradient-to-r from-[#1E1E22] via-[#25252A] to-[#1E1E22] border border-amber-500/30 rounded-2xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xl">
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 font-bold shrink-0 shadow-lg shadow-amber-500/10">
+                <FileText className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-black uppercase tracking-wider bg-amber-500 text-gray-950 px-2 py-0.5 rounded-full font-mono">
+                    Módulo de RH & Departamento Pessoal
+                  </span>
+                  <h3 className="font-display font-bold text-base text-white">Relatório Mensal de Atestados em PDF</h3>
+                </div>
+                <p className="text-xs text-gray-400 mt-1 leading-relaxed">
+                  Exporte relatórios consolidados formatados com cabeçalho corporativo da Safira Cosméticos para o envio direto ao departamento de Recursos Humanos.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowRhExportModal(true)}
+              className="bg-amber-500 hover:bg-amber-400 text-gray-950 font-extrabold px-5 py-2.5 rounded-xl text-xs transition-all cursor-pointer shadow-lg shadow-amber-500/20 flex items-center gap-2 shrink-0 border border-amber-400/40"
+            >
+              <FileText className="w-4 h-4" />
+              <span>Exportar PDF para o RH</span>
+            </button>
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Form de envio */}
             <div className="lg:col-span-5 bg-[#161618] border border-white/10 rounded-2xl p-5 space-y-4 shadow-lg">
@@ -4261,6 +4559,41 @@ export default function PromotoraConsole({
           </div>
         </div>
       )}
+
+      {/* RH Export PDF Modal */}
+      <AtestadosRHExportModal
+        isOpen={showRhExportModal}
+        onClose={() => setShowRhExportModal(false)}
+        atestados={atestados}
+        promotoras={promotoras}
+        activePromotora={activePromotora}
+      />
+
+      {/* Check-in / Check-out Overdue Alert Modal */}
+      <CheckInCheckOutAlertModal
+        isOpen={pontoAlertOpen}
+        alertType={pontoAlertType}
+        escala={pontoAlertTargetEscala}
+        cliente={clientes.find(c => c.id === (pontoAlertTargetEscala?.clienteId || selectedClienteId)) || null}
+        activeVisita={activeVisita}
+        minutesOverdue={pontoAlertOverdueMinutes}
+        gpsDistanceMeters={
+          selectedClienteId && pdvGeoConfigs[selectedClienteId] && gpsData
+            ? calculateDistance(gpsData.lat, gpsData.lng, pdvGeoConfigs[selectedClienteId].lat, pdvGeoConfigs[selectedClienteId].lng)
+            : 12.5
+        }
+        onCheckIn={handleCheckIn}
+        onCheckOut={handleRegisterSaidaTarde}
+        onSnooze={() => {
+          setPontoAlertSnoozedUntil(Date.now() + 5 * 60 * 1000);
+          setPontoAlertOpen(false);
+          triggerPushAlert('⏰ Lembrete Pausado', 'O aviso de ponto reaparecerá em 5 minutos.', 'info');
+        }}
+        onDismiss={() => {
+          setPontoAlertOpen(false);
+          setPontoAlertDismissedForSession(true);
+        }}
+      />
     </div>
   );
 }

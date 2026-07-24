@@ -1,0 +1,111 @@
+{
+  "promotoras": [
+    {
+      "id": "prom-01",
+      "nome": "Jaqueline Vechi",
+      "codigoBling": "PROM04",
+      "telefone": "(27) 99888-7766",
+      "email": "jaqueline.promotora@safira.com.br",
+      "usuario": "jaqueline.vechi",
+      "senha": "safira123",
+      "status": "Ativa",
+      "avatar": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150",
+      "role": "Promotora"
+    },
+    {
+      "id": "prom-02",
+      "nome": "Daniela Alves de Almeida",
+      "codigoBling": "PROM05",
+      "telefone": "(27) 99111-2233",
+      "email": "daniela.alves@safira.com.br",
+      "usuario": "daniela.alves",
+      "senha": "safira123",
+      "status": "Ativa",
+      "avatar": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150",
+      "role": "Promotora"
+    },
+    {
+      "id": "prom-04",
+      "nome": "Safira Cosméticos Admin",
+      "codigoBling": "ADMIN01",
+      "telefone": "(27) 3300-4400",
+      "email": "comercial.safiracosmeticos@gmail.com",
+      "usuario": "admin.safira",
+      "senha": "safira2026",
+      "status": "Ativa",
+      "avatar": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150",
+      "role": "Admin"
+    },
+    {
+      "id": "prom-05",
+      "nome": "Anny",
+      "codigoBling": "PROM07",
+      "telefone": "(27) 99999-8888",
+      "email": "anny.promotora@safira.com.br",
+      "usuario": "anny",
+      "senha": "safira123",
+      "status": "Ativa",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
+      "role": "Promotora"
+    }
+  ],
+  "clientes": [],
+  "produtos": [
+    {
+      "id": "prod-01",
+      "nome": "Reparador De Pontas Amend 60Mi",
+      "sku": "103-1",
+      "ean": "7896852626788",
+      "precoSugerido": 43.89,
+      "categoria": "Finalizadores"
+    },
+    {
+      "id": "prod-02",
+      "nome": "Filtro Solar Cabelos Tingidos Amend 180G",
+      "sku": "108-1",
+      "ean": "7896852610114",
+      "precoSugerido": 26.99,
+      "categoria": "Tratamento"
+    },
+    {
+      "id": "prod-03",
+      "nome": "Mascara Brilho Com Vitamina E Amend 500G",
+      "sku": "603-1",
+      "ean": "7896852610770",
+      "precoSugerido": 31.15,
+      "categoria": "Máscaras"
+    },
+    {
+      "id": "prod-04",
+      "nome": "Mascara Revitalizante D'Pantenol Amend 500G",
+      "sku": "605-1",
+      "ean": "7896852610756",
+      "precoSugerido": 32.05,
+      "categoria": "Máscaras"
+    },
+    {
+      "id": "prod-05",
+      "nome": "Mascara Matizadora Amend Peal Blonde 250G",
+      "sku": "1272-1",
+      "ean": "7896852619438",
+      "precoSugerido": 42.99,
+      "categoria": "Matizadores"
+    }
+  ],
+  "pedidos": [],
+  "visitas": [],
+  "escalas": [],
+  "atestados": [],
+  "blingConfig": {
+    "apiKey": "ef9f0be1dee1a52a420f09f71a4fbd44c7a3f001",
+    "accessToken": "",
+    "refreshToken": "",
+    "clientId": "22fd10fd6388744d16aa29d4b4b10a71a5715a2a",
+    "clientSecret": "a5f7e5214f8e0dfa43ebd87af67285b69ef38ff6b4906adac3f568329b9b",
+    "statusConexao": "Desconectado",
+    "webhookAtivo": true,
+    "aliasServidor": "Safira Portal Comercial",
+    "logsSincronizacao": []
+  },
+  "metasVendas": []
+}

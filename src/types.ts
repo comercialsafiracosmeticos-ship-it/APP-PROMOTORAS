@@ -170,3 +170,17 @@ export interface BlingConfig {
   aliasServidor: string;
   logsSincronizacao?: BlingSyncLog[];
 }
+
+export interface NotificacaoMeta {
+  id: string;
+  promotoraId: string;
+  promotoraNome?: string;
+  titulo: string;
+  mensagem: string;
+  data: string; // ISO String
+  lida: boolean;
+  tipo: 'meta' | 'escala' | 'sistema';
+  metaValor?: number;
+  mesAno?: string;
+}
+

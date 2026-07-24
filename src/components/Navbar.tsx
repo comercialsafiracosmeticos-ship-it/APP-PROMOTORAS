@@ -1,6 +1,6 @@
-import { Link2, Sparkles, LogOut, CheckCircle2, Menu, X, Landmark, Compass, Calendar, ShoppingBag, Shield, User, ChevronDown, Lock, Key } from 'lucide-react';
+import { Link2, Sparkles, LogOut, CheckCircle2, Menu, X, Landmark, Compass, Calendar, ShoppingBag, Shield, User, ChevronDown, Lock, Key, Bell, BellRing, Check } from 'lucide-react';
 import { useState, FormEvent } from 'react';
-import { Promotora } from '../types';
+import { Promotora, NotificacaoMeta } from '../types';
 import { FirebaseUser } from '../lib/firebase';
 
 interface NavbarProps {
@@ -11,7 +11,11 @@ interface NavbarProps {
   promotoras: Promotora[];
   onSelectUser: (user: Promotora) => void;
   onOpenAuthModal?: () => void;
+  onLogout?: () => void;
   authUser?: FirebaseUser | null;
+  notificacoes?: NotificacaoMeta[];
+  onMarkNotificacaoRead?: (id: string) => void;
+  onClearAllNotificacoes?: (promotoraId?: string) => void;
 }
 
 export default function Navbar({ 
@@ -22,15 +26,30 @@ export default function Navbar({
   promotoras,
   onSelectUser,
   onOpenAuthModal,
-  authUser
+  onLogout,
+  authUser,
+  notificacoes = [],
+  onMarkNotificacaoRead,
+  onClearAllNotificacoes
 }: NavbarProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showSwitchModal, setShowSwitchModal] = useState(false);
+  const [showNotifMenu, setShowNotifMenu] = useState(false);
   const [selectedUserToAuth, setSelectedUserToAuth] = useState<Promotora | null>(null);
   const [authPasswordInput, setAuthPasswordInput] = useState('');
   const [authError, setAuthError] = useState('');
 
   const isAdmin = activeUser?.role === 'Admin';
+
+  // Filter notifications for active user
+  const userNotifs = notificacoes.filter(n => {
+    if (!activeUser) return false;
+    if (isAdmin) return true; // Admin sees all
+    return n.promotoraId === activeUser.id;
+  });
+
+  const unreadCount = userNotifs.filter(n => !n.lida).length;
+
 
   // Role-Based Tabs Filter:
   // - Admin sees ALL modules: Promotoras & PDV, Clientes & Financeiro, Dashboard, Pedidos de Vendas, Painel Bling v3
@@ -125,8 +144,106 @@ export default function Navbar({
             })}
           </nav>
 
-          {/* User Profile / Switcher Button & Firebase Auth Trigger */}
-          <div className="hidden sm:flex items-center gap-2">
+          {/* User Profile / Notifications / Switcher Button & Firebase Auth Trigger */}
+          <div className="hidden sm:flex items-center gap-2 relative">
+            {/* Notification Bell Button */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowNotifMenu(!showNotifMenu)}
+                className={`p-2 rounded-xl border transition-all cursor-pointer relative ${
+                  unreadCount > 0 
+                    ? 'bg-amber-500/10 border-amber-500/40 text-amber-400 hover:bg-amber-500/20 shadow-md shadow-amber-500/10' 
+                    : 'bg-[#1F1F22] border-white/10 text-white/60 hover:text-white hover:border-white/20'
+                }`}
+                title="Notificações de metas e alertas"
+              >
+                {unreadCount > 0 ? (
+                  <BellRing className="w-4 h-4 text-amber-400 animate-pulse" />
+                ) : (
+                  <Bell className="w-4 h-4" />
+                )}
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-amber-500 text-gray-950 text-[10px] font-black rounded-full w-4 h-4 flex items-center justify-center border-2 border-[#0F0F10] animate-bounce">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {/* Notification Popover Dropdown */}
+              {showNotifMenu && (
+                <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-[#18181B] border border-white/10 rounded-2xl shadow-2xl z-50 p-4 space-y-3">
+                  <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <BellRing className="w-4 h-4 text-amber-400" />
+                      <h3 className="font-bold text-xs text-white uppercase tracking-wider">Notificações de Metas</h3>
+                      {unreadCount > 0 && (
+                        <span className="bg-amber-500/20 text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-500/30">
+                          {unreadCount} nova{unreadCount > 1 ? 's' : ''}
+                        </span>
+                      )}
+                    </div>
+                    {userNotifs.length > 0 && onClearAllNotificacoes && (
+                      <button
+                        onClick={() => {
+                          onClearAllNotificacoes(isAdmin ? undefined : activeUser?.id);
+                        }}
+                        className="text-[10px] text-amber-400 hover:underline font-bold cursor-pointer"
+                      >
+                        Limpar lidas
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="max-h-72 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                    {userNotifs.length === 0 ? (
+                      <div className="text-center py-6 text-gray-500 text-xs">
+                        Nenhuma notificação recente no momento.
+                      </div>
+                    ) : (
+                      userNotifs.map((n) => (
+                        <div
+                          key={n.id}
+                          className={`p-3 rounded-xl border text-xs transition-all relative ${
+                            !n.lida 
+                              ? 'bg-amber-500/10 border-amber-500/30 text-white' 
+                              : 'bg-[#222225] border-white/5 text-gray-400'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="space-y-1">
+                              <div className="font-bold text-amber-300 flex items-center gap-1.5 text-xs">
+                                <span>{n.titulo}</span>
+                                {!n.lida && <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />}
+                              </div>
+                              <p className="text-[11px] text-gray-300 leading-relaxed">{n.mensagem}</p>
+                              <div className="flex items-center gap-2 text-[10px] text-gray-500 font-mono mt-1">
+                                <span>{new Date(n.data).toLocaleDateString('pt-BR')} às {new Date(n.data).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                                {n.metaValor && (
+                                  <span className="text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                                    Meta: R$ {n.metaValor.toLocaleString('pt-BR')}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            {!n.lida && onMarkNotificacaoRead && (
+                              <button
+                                onClick={() => onMarkNotificacaoRead(n.id)}
+                                className="p-1 hover:bg-white/10 rounded-lg text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer shrink-0"
+                                title="Marcar notificação como lida"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
             {onOpenAuthModal && (
               <button
                 type="button"
@@ -169,6 +286,18 @@ export default function Navbar({
                 </div>
               </div>
             </button>
+
+            {onLogout && (
+              <button
+                type="button"
+                onClick={onLogout}
+                className="flex items-center gap-1.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 hover:border-rose-500/50 text-rose-300 hover:text-rose-200 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm"
+                title="Sair da conta e encerrar sessão"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span className="hidden md:inline">Sair</span>
+              </button>
+            )}
           </div>
 
           {/* Mobile Menu button */}
@@ -221,6 +350,20 @@ export default function Navbar({
               {activeUser?.nome} ({isAdmin ? 'Admin' : 'Promotora'})
             </span>
           </div>
+
+          {onLogout && (
+            <button
+              type="button"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                onLogout();
+              }}
+              className="w-full flex items-center justify-center gap-2 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-300 font-bold px-4 py-2.5 rounded-xl text-xs transition-all cursor-pointer mt-2"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Sair do Sistema (Deslogar)</span>
+            </button>
+          )}
         </div>
       )}
 
