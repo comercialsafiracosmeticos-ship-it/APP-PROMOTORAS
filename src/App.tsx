@@ -201,16 +201,18 @@ export default function App() {
             if (localBling.webhookAtivo !== undefined) finalBlingConfig.webhookAtivo = localBling.webhookAtivo;
           }
 
-          // Fetch directly from Firestore doc settings/bling if local & server lack credentials
-          if (!finalBlingConfig.apiKey && !finalBlingConfig.clientId) {
-            try {
-              const fsBling = await getBlingConfigFromFirestore();
-              if (fsBling) {
-                finalBlingConfig = { ...finalBlingConfig, ...fsBling };
-              }
-            } catch (err) {
-              console.error("Error loading Bling config from Firestore", err);
+          // Fetch directly from Firestore doc settings/bling to ensure published domain sync
+          try {
+            const fsBling = await getBlingConfigFromFirestore();
+            if (fsBling) {
+              if (fsBling.apiKey) finalBlingConfig.apiKey = fsBling.apiKey;
+              if (fsBling.clientId) finalBlingConfig.clientId = fsBling.clientId;
+              if (fsBling.clientSecret) finalBlingConfig.clientSecret = fsBling.clientSecret;
+              if (fsBling.aliasServidor) finalBlingConfig.aliasServidor = fsBling.aliasServidor;
+              if (fsBling.webhookAtivo !== undefined) finalBlingConfig.webhookAtivo = fsBling.webhookAtivo;
             }
+          } catch (err) {
+            console.error("Error loading Bling config from Firestore", err);
           }
 
           setBlingConfig(finalBlingConfig);
