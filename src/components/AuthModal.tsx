@@ -401,60 +401,6 @@ export default function AuthModal({
             <Chrome className="w-4 h-4 text-amber-400" />
             Entrar com Google SSO (Firebase Auth)
           </button>
-
-          {/* Quick Demo Login Switcher */}
-          <div className="space-y-1.5 pt-1">
-            <p className="text-[10px] font-bold text-white/40 uppercase tracking-wider flex items-center justify-between">
-              <span>Acesso Rápido de Teste (Perfis do Sistema)</span>
-              <span className="text-amber-400 text-[9px] font-mono">Firebase Auth Sync</span>
-            </p>
-
-            <div className="grid grid-cols-1 gap-1.5 max-h-48 overflow-y-auto pr-1">
-              {promotoras.map((p) => {
-                const isSelected = activePromotora?.id === p.id;
-                const isPAdmin = p.role === 'Admin';
-                return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => handleQuickDemoLogin(p)}
-                    className={`w-full text-left p-2.5 rounded-xl border text-xs transition-all flex items-center justify-between cursor-pointer ${
-                      isSelected
-                        ? 'bg-amber-500/15 border-amber-500/50 text-white font-bold'
-                        : 'bg-[#1C1C1E] hover:bg-[#252528] border-white/5 text-white/80'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
-                        isPAdmin ? 'bg-amber-500/20 text-amber-400' : 'bg-emerald-500/20 text-emerald-400'
-                      }`}>
-                        {isPAdmin ? <Shield className="w-3.5 h-3.5" /> : <User className="w-3.5 h-3.5" />}
-                      </div>
-                      <div>
-                        <div className="font-bold text-white flex items-center gap-1.5">
-                          {p.nome}
-                          <span className={`text-[8px] px-1 py-0.2 rounded font-mono font-black ${
-                            isPAdmin ? 'bg-amber-500/30 text-amber-300' : 'bg-emerald-500/30 text-emerald-300'
-                          }`}>
-                            {p.role}
-                          </span>
-                        </div>
-                        <div className="text-[10px] text-white/40 font-mono">
-                          {p.email || `${p.usuario || 'user'}@safiracosmeticos.com.br`}
-                        </div>
-                      </div>
-                    </div>
-
-                    {isSelected && (
-                      <span className="text-[10px] text-amber-400 font-extrabold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                        Ativo
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
         </div>
       </div>
     </div>

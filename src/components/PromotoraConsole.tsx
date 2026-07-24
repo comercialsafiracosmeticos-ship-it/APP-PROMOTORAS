@@ -1171,18 +1171,25 @@ export default function PromotoraConsole({
           )}
 
           <span className="text-[10px] font-bold text-white/40 uppercase tracking-wider hidden sm:inline">Perfil:</span>
-          <select
-            value={activePromotora.id}
-            onChange={(e) => {
-              const selected = promotoras.find(p => p.id === e.target.value);
-              if (selected) setActivePromotora(selected);
-            }}
-            className="text-xs font-semibold bg-[#161618] border border-white/10 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 cursor-pointer text-white"
-          >
-            {promotoras.map(p => (
-              <option key={p.id} value={p.id} className="bg-[#161618]">{p.nome} ({p.codigoBling})</option>
-            ))}
-          </select>
+          {activePromotora.role === 'Admin' ? (
+            <select
+              value={activePromotora.id}
+              onChange={(e) => {
+                const selected = promotoras.find(p => p.id === e.target.value);
+                if (selected) setActivePromotora(selected);
+              }}
+              className="text-xs font-semibold bg-[#161618] border border-amber-500/30 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 cursor-pointer text-white"
+            >
+              {promotoras.map(p => (
+                <option key={p.id} value={p.id} className="bg-[#161618]">{p.nome} ({p.codigoBling})</option>
+              ))}
+            </select>
+          ) : (
+            <div className="text-xs font-semibold bg-[#161618] border border-white/10 rounded-lg px-3 py-1.5 text-white flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-400" />
+              <span>{activePromotora.nome} ({activePromotora.codigoBling})</span>
+            </div>
+          )}
         </div>
       </div>
 

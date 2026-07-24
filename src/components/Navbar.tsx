@@ -438,7 +438,7 @@ export default function Navbar({
                 <p className="text-xs font-bold text-white/40 uppercase tracking-wider">Perfis Disponíveis no Sistema</p>
 
                 <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                  {promotoras.map((p) => {
+                  {(isAdmin ? promotoras : promotoras.filter(p => p.id === activeUser?.id)).map((p) => {
                     const isCurrent = activeUser?.id === p.id;
                     const isPAdmin = p.role === 'Admin';
                     return (
