@@ -37,6 +37,7 @@ interface PromotoraConsoleProps {
   onSyncBling?: () => void;
   syncing?: boolean;
   onLogout?: () => void;
+  onSelectUser?: (prom: Promotora) => void;
   notificacoes?: NotificacaoMeta[];
   onMarkNotificacaoRead?: (id: string) => void;
 }
@@ -64,6 +65,7 @@ export default function PromotoraConsole({
   onSyncBling,
   syncing,
   onLogout,
+  onSelectUser,
   notificacoes = [],
   onMarkNotificacaoRead
 }: PromotoraConsoleProps) {
@@ -946,7 +948,11 @@ export default function PromotoraConsole({
     );
 
     if (matched) {
-      setActivePromotora(matched);
+      if (onSelectUser) {
+        onSelectUser(matched);
+      } else {
+        setActivePromotora(matched);
+      }
       localStorage.setItem('safira_active_user_id', matched.id);
       setShowLoginModal(false);
       setLoginUsuarioInput('');

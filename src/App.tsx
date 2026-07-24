@@ -139,6 +139,28 @@ export default function App() {
             console.warn("Could not fetch promotoras directly from Firestore:", err);
           }
 
+          // Ensure Master Admin is registered in the active team
+          const hasAdmin = activeProms.some((p: Promotora) => 
+            p.email?.toLowerCase() === 'comercial.safiracosmeticos@gmail.com' || 
+            p.usuario?.toLowerCase() === 'admin.safira'
+          );
+          if (!hasAdmin) {
+            const adminProm: Promotora = {
+              id: 'prom-04',
+              nome: 'Safira Cosméticos Admin',
+              codigoBling: 'ADMIN01',
+              telefone: '(27) 3300-4400',
+              email: 'comercial.safiracosmeticos@gmail.com',
+              usuario: 'admin.safira',
+              senha: 'safira2026',
+              status: 'Ativa',
+              avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150',
+              role: 'Admin'
+            };
+            activeProms.push(adminProm);
+            savePromotoraToFirestore(adminProm).catch(() => {});
+          }
+
           // Ensure Anny is registered in the active team
           const hasAnny = activeProms.some((p: Promotora) => p.nome?.toLowerCase().includes('anny'));
           if (!hasAnny) {
@@ -226,14 +248,14 @@ export default function App() {
             }).catch(() => {});
           }
 
-          if (store.promotoras && store.promotoras.length > 0) {
+          if (activeProms && activeProms.length > 0) {
             const savedId = localStorage.getItem('safira_active_user_id');
-            const savedUser = store.promotoras.find((p: any) => p.id === savedId);
-            if (savedUser) {
-              setActivePromotora(savedUser);
-            } else {
-              const adminUser = store.promotoras.find((p: any) => p.role === 'Admin');
-              setActivePromotora(adminUser || store.promotoras[0]);
+            const savedUser = activeProms.find((p: any) => p.id === savedId);
+            const adminUser = activeProms.find((p: any) => p.role === 'Admin');
+            const targetUser = savedUser || adminUser || activeProms[0];
+            setActivePromotora(targetUser);
+            if (targetUser.role === 'Admin' && activeTab === 'PROMOTORA') {
+              setActiveTab('DASHBOARD');
             }
           }
         }
@@ -251,7 +273,12 @@ export default function App() {
           setPromotoras(cachedPromotoras);
           const savedId = localStorage.getItem('safira_active_user_id');
           const savedUser = cachedPromotoras.find((p) => p.id === savedId);
-          setActivePromotora(savedUser || cachedPromotoras[0]);
+          const adminUser = cachedPromotoras.find((p) => p.role === 'Admin');
+          const targetUser = savedUser || adminUser || cachedPromotoras[0];
+          setActivePromotora(targetUser);
+          if (targetUser.role === 'Admin' && activeTab === 'PROMOTORA') {
+            setActiveTab('DASHBOARD');
+          }
         }
       } finally {
         setLoading(false);
@@ -264,9 +291,15 @@ export default function App() {
     setActivePromotora(user);
     localStorage.setItem('safira_active_user_id', user.id);
 
-    // If switched to a Promotora and current tab is admin-only, redirect to PROMOTORA tab
-    if (user.role === 'Promotora' && ['CLIENTES', 'PEDIDOS', 'BLING'].includes(activeTab)) {
-      setActiveTab('PROMOTORA');
+    // Redirect user to appropriate view depending on role
+    if (user.role === 'Admin') {
+      if (activeTab === 'PROMOTORA') {
+        setActiveTab('DASHBOARD');
+      }
+    } else if (user.role === 'Promotora') {
+      if (['CLIENTES', 'PEDIDOS', 'BLING', 'DASHBOARD'].includes(activeTab)) {
+        setActiveTab('PROMOTORA');
+      }
     }
   };
 
@@ -920,6 +953,7 @@ export default function App() {
             atestados={atestados}
             activePromotora={activePromotora}
             setActivePromotora={setActivePromotora}
+            onSelectUser={handleSelectUser}
             onAddPromotora={handleAddPromotora}
             onDeletePromotora={handleDeletePromotora}
             onUpdatePromotora={handleUpdatePromotora}
